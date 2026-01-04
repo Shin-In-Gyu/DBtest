@@ -1,43 +1,23 @@
 # backend/app/core/config.py
+import json
+import os
 
-# 기본 도메인 (기존 공지사항용)
+# 현재 config.py 파일이 있는 디렉토리 경로를 가져옵니다.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 같은 폴더에 있는 notices.json 경로를 설정합니다.
+JSON_PATH = os.path.join(BASE_DIR, "notices.json")
+
+# 기본 도메인 (필요 시 유지)
 BASE = "https://web.kangnam.ac.kr"
 
-# 카테고리별 도메인 및 메뉴 ID 설정
-NOTICE_CONFIGS = {
-    # 기존 메인 공지사항 (기존 코드 호환용)
-    "univ": {
-        "domain": BASE,
-        "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
-        "seq": 0
-    },
-    "academic": {
-        "domain": BASE,
-        "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
-        "seq": 116
-    },
-    "scholar": {
-        "domain": BASE,
-        "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
-        "seq": 117
-    },
-    # --- 추가하신 학과 공지사항 ---
-    "computer": {
-        "domain": "https://sae.kangnam.ac.kr",
-        "menu_id": "e408e5e7c9f27b8c0d5eeb9e68528b48",
-        "seq": 0
-    },
-    "social": {
-        "domain": "https://knusw.kangnam.ac.kr",
-        "menu_id": "22dd7f703ec676ffdecdd6b4e4fe1b1b",
-        "seq": 0
-    },
-    "ai": {
-        "domain": "https://ace.kangnam.ac.kr",
-        "menu_id": "f3a3bfbbc5715e4180657f71177d8bcf",
-        "seq": 0
-    }
-}
+# JSON 파일을 읽어서 NOTICE_CONFIGS 변수에 저장합니다.
+try:
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        NOTICE_CONFIGS = json.load(f)
+except FileNotFoundError:
+    print(f"Error:{JSON_PATH} 파일을 찾을 수 없습니다.")
+    NOTICE_CONFIGS = {}        
+
 
 def get_urls(category: str):
     """카테고리에 맞는 리스트/상세 URL 및 기본 Seq를 반환합니다."""
