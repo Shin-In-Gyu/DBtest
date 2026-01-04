@@ -45,7 +45,7 @@ async def get_notice_list(category: str = "univ"):
 
         # 상세 페이지 이동에 필요한 고유 식별자(Encrypted Key) 추출
         enc_menu_seq = params.get("encMenuSeq")
-        enc_menu_board_seq = params.get("encMenuBoard_seq") # [Fix] 오타 주의: API 응답값 확인 필요
+        enc_menu_board_seq = params.get("encMenuBoardSeq") # [Fix] 오타 주의: API 응답값 확인 필요
         scrt_wrt_yn = params.get("scrtWrtYn", False)
 
         if not (enc_menu_seq and enc_menu_board_seq):
