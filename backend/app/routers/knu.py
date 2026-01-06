@@ -1,28 +1,25 @@
-from fastapi import APIRouter, Query
-from app.services.knu_notice_service import get_notice_list, get_notice_detail
-from app.utils.security import ensure_allowed_url
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from typing import List, Optional
+
+from app.database.database import get_db
+from app.database.models import Notice
+from app.services import knu_notice_service
 
 router = APIRouter()
 
 @router.get("/notices")
-async def list_notices(
-    category: str = Query(
-        "univ", 
-        description="공지사항 카테고리 키 (예: univ, academic, computer, ai, social_work 등. 전체 리스트는 notices.json 참조)"
+async def read_notices(
+    category: str = "all",
+    q: Optional[str] = Query(None, description="검색어"),
+    page: int = 1,
+    db: Session = Depends(get_db)
+):
+    limit = 20
+    skip = (page - 1) * limit
+    
+    results = knu_notice_service.search_notices_from_db(
+        db, category, query=q, skip=skip, limit=limit
     )
-):
-    """
-    지정된 카테고리의 공지사항 목록을 가져옵니다.
-    """
-    return await get_notice_list(category)
-
-@router.get("/notice")
-async def notice_detail(
-    url: str = Query(..., description="목록에서 받아온 detailUrl을 그대로 입력")
-):
-    """
-    공지사항의 상세 내용(본문, 첨부파일 등)을 가져옵니다.
-    """
-    # 보안을 위해 허용된 도메인(web, sae, ace 등)인지 검증
-    url = ensure_allowed_url(url)
-    return await get_notice_detail(url)
+    
+    return results
