@@ -7,8 +7,14 @@ class Notice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
-    link = Column(String, unique=True, index=True) # 중복 방지 키
-    content = Column(Text) # 본문 (검색용)
+    link = Column(String, unique=True, index=True)
+    
+    content = Column(Text)  # 이제 여기에는 순수 본문 텍스트만 들어갑니다.
+    
+    # [NEW] 이미지와 파일을 별도로 저장할 컬럼 추가 (JSON 문자열로 저장)
+    images = Column(Text, default="[]") 
+    files = Column(Text, default="[]") 
+    
     category = Column(String, index=True)
     author = Column(String, nullable=True)
     date = Column(String, nullable=True)
