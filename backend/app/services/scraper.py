@@ -21,6 +21,7 @@ async def scrape_notice_content(url: str):
 
     data = {
         "title": "",
+        "date": "",
         "texts": [],
         "images": [],
         "files": []
@@ -43,6 +44,34 @@ async def scrape_notice_content(url: str):
     else:
         print("   ⚠️ [제목 찾기 실패] HTML 구조가 또 다른 패턴일 수 있습니다.")
 
+    # 1-2. 날짜 추출
+    # 스크린샷 구조: .tblw_date -> span -> (<span class="hide_txt">등록날짜</span>) + "날짜텍스트"
+    # -------------------------------------------------------
+    date_text = ""
+    date_tag = soup.select_one('.tblw_date')
+
+    if date_tag:
+        for span in date_tag.find_all('span'):
+            if "조회수" in span.get_text():
+                span.decompose()  # DOM에서 조회수 영역 삭제
+        # "등록날짜"라고 적힌 숨겨진 라벨(<span class="hide_txt">)을 찾습니다.
+        label = date_tag.select_one('.hide_txt')
+        
+        # 라벨이 있으면 DOM에서 아예 삭제(decompose)해버립니다. 
+        # 그래야 나중에 get_text할 때 "등록날짜"라는 글자가 섞이지 않습니다.
+        if label:
+            label.decompose()
+        
+        # 라벨을 지운 상태에서 남은 텍스트(순수 날짜)만 깔끔하게 가져옵니다.
+        date_text = date_tag.get_text(strip=True)
+        print(f"   📅 [날짜 발견] {date_text}")
+    else:
+        # 혹시 구조가 다를 경우를 대비한 예비 로직 (필요시 추가)
+        print("   ⚠️ [날짜] 정보를 찾을 수 없습니다.")
+
+    # 추출한 날짜를 딕셔너리에 담습니다.
+    data["date"] = date_text
+
     # -------------------------------------------------------
     # 2. 첨부파일 추출
     # 스크린샷 경로: .wri_area.file -> a.link_file
@@ -63,6 +92,9 @@ async def scrape_notice_content(url: str):
                     "name": f_name,
                     "url": full_url
                 })
+    
+
+    
 
     # -------------------------------------------------------
     # 3. 본문 텍스트 & 이미지 추출

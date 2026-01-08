@@ -118,11 +118,13 @@ async def crawl_and_sync_notices(db: Session, category: str = "univ"):
             # ensure_ascii=False : 한글이 깨지지 않고 사람이 읽을 수 있는 형태로 저장됨
             images_json = json.dumps(scraped_data["images"], ensure_ascii=False)
             files_json = json.dumps(scraped_data["files"], ensure_ascii=False)
+            post_date = scraped_data.get("date")
 
             # (4) Notice 모델 객체 생성 (DB 테이블의 한 행을 만듦)
             new_notice = Notice(
                 title=final_title,
                 link=detail_url,
+                date=post_date,
                 content=content_body, # 순수 본문 텍스트
                 images=images_json,   # 이미지 URL 리스트 (JSON String)
                 files=files_json,     # 파일 정보 리스트 (JSON String)
