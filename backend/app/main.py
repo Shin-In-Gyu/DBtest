@@ -6,15 +6,46 @@ from app.database.database import engine, Base, SessionLocal
 from app.services import knu_notice_service
 from app.routers import knu
 from app.core.config import NOTICE_CONFIGS
+from fastapi.middleware.cors import CORSMiddleware
+from app.routers.knu import VIEW_COUNT_BUFFER # 버퍼 가져오기
+from app.database.models import Notice 
+from app.services import knu_notice_service
 
 Base.metadata.create_all(bind=engine)
 scheduler = AsyncIOScheduler()
-
 # [전역 변수] 실행 중인 초기화 태스크를 추적하기 위함
 init_task = None
 
+
+async def sync_view_counts_to_db():
+    """
+    메모리에 쌓인 조회수를 DB에 한 번에 업데이트(Flush)하고 버퍼를 비웁니다.
+    """
+    if not VIEW_COUNT_BUFFER:
+        return
+
+    print(f"💾 [조회수 동기화] {len(VIEW_COUNT_BUFFER)}개 게시글 조회수 반영 중...")
+    
+    db = SessionLocal()
+    try:
+        # 하나씩 업데이트 (Bulk Update가 더 좋지만 SQLite/ORM에서는 이 정도도 충분)
+        for notice_id, count in VIEW_COUNT_BUFFER.items():
+            notice = db.query(Notice).filter(Notice.id == notice_id).first()
+            if notice:
+                notice.app_views += count
+        
+        db.commit()
+        # 반영 완료 후 버퍼 초기화
+        VIEW_COUNT_BUFFER.clear()
+        print("✅ 조회수 반영 완료")
+    except Exception as e:
+        print(f"❌ 조회수 반영 실패: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 async def scheduled_job():
-    # ... (기존과 동일한 크롤링 로직) ...
+    # ... (기존과 동일한 크롤링 로직) ...                            
     print("🚀 [스케줄러] 데이터 동기화 작업 시작...")
     db = SessionLocal()
     categories = list(NOTICE_CONFIGS.keys())
@@ -29,6 +60,7 @@ async def scheduled_job():
         print(f"❌ 작업 중 치명적 오류: {e}")
     finally:
         db.close()
+    await sync_view_counts_to_db()
     print("🏁 [스케줄러] 데이터 동기화 완료!")
 
 @asynccontextmanager
@@ -61,6 +93,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(knu.router, prefix="/api/knu", tags=["knu"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 실제 배포시에는 ["https://myapp.com"] 등으로 변경
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ... (나머지 코드 동일)
 

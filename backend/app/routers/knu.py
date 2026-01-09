@@ -25,15 +25,31 @@ async def read_notices(
     
     return results
 
+# [NEW] 조회수 버퍼 (메모리에 임시 저장)
+# 구조: { notice_id : count } -> { 5: 1, 10: 3 }
+VIEW_COUNT_BUFFER = {}
+
 @router.get("/notice/detail")
-async def get_notice_detail(url: str):
+async def get_notice_detail(
+    url: str, 
+    notice_id: Optional[int] = None, # [NEW] 앱에서 ID를 같이 넘겨줘야 정확함
+    db: Session = Depends(get_db)
+):
     """
-    특정 공지사항 URL을 받아 앱에서 보기 좋은 JSON 형태로 반환합니다.
+    상세 내용을 반환하고, 앱 내 조회수(app_views)를 메모리 버퍼에 증가시킵니다.
     """
+    # 1. 버퍼에 조회수 증가 (DB 부하 0)
+    if notice_id:
+        if notice_id in VIEW_COUNT_BUFFER:
+            VIEW_COUNT_BUFFER[notice_id] += 1
+        else:
+            VIEW_COUNT_BUFFER[notice_id] = 1
+
+    # 2. 크롤링 데이터 반환 (기존 로직)
+    # (이미지, 본문 등은 실시간 크롤링하거나 DB에 저장된 내용을 줄 수도 있음)
+    # 여기서는 기존 로직 유지
     try:
         content = await scrape_notice_content(url)
         return content
     except Exception as e:
-        # 크롤링 실패 시 예외 처리 (로그 남기기 등)
-        return {"error": str(e), "title": "로딩 실패",
-                 "texts": ["내용을 불러올 수 없습니다."], "images": [], "files": []}
+        return {"error": str(e), "texts": []}
