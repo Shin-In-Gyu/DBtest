@@ -120,7 +120,7 @@
     "seq": 0
   },
   "sped_elem": {
-    "name": "초등특수교육과",
+    "name": "초등중등특수교육과",
     "domain": "https://sped.kangnam.ac.kr",
     "menu_id": "f1b0fb76ba66f0a7319fc278bed29175",
     "seq": 0
@@ -147,12 +147,6 @@
     "name": "음악학과",
     "domain": "https://musicdpt.kangnam.ac.kr",
     "menu_id": "ac37fa802cc891d4909f48061ae97ecc",
-    "seq": 0
-  },
-  "sped_middle": {
-    "name": "중등특수교육과",
-    "domain": "https://sped.kangnam.ac.kr",
-    "menu_id": "f1b0fb76ba66f0a7319fc278bed29175",
     "seq": 0
   }
 }

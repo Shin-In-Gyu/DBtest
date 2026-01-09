@@ -4,18 +4,18 @@ import httpx
 from urllib.parse import urljoin
 import re
 from datetime import datetime
-from httpx import TimeoutException, RequestError, HTTPStatusError
 from app.core.logger import get_logger
+from app.core.config import SSL_VERIFY
 
 logger = get_logger()
 
 async def scrape_notice_content(url: str):
     """
-    공지사항 상세 페이지에 접속해 내용을 가져옵니다.
-    Regex를 사용해 다양한 날짜 포맷과 조회수를 파싱합니다.
+    공지사항 상세 페이지 스크래핑
     """
     try:
-        async with httpx.AsyncClient(verify=False, timeout=10.0) as client:
+        # verify=SSL_VERIFY 설정을 사용하여 보안 유연성 확보
+        async with httpx.AsyncClient(verify=SSL_VERIFY, timeout=15.0) as client:
             response = await client.get(url)
             response.raise_for_status()
     except Exception as e:
@@ -29,47 +29,45 @@ async def scrape_notice_content(url: str):
             "images": [], "files": [], "univ_views": 0
         }
 
-        # 1. 제목 추출
-        title_tag = soup.select_one('.tblw_subj') or soup.select_one('.subject')
+        # 1. 제목 (다양한 클래스 대응)
+        title_tag = soup.select_one('.tblw_subj') or soup.select_one('.subject') or soup.select_one('h4.title')
         if title_tag:
             data["title"] = title_tag.get_text(strip=True)
 
-        # 2. 날짜 및 조회수 (Regex 사용)
-        date_tag = soup.select_one('.tblw_date')
+        # 2. 날짜 및 조회수
+        date_tag = soup.select_one('.tblw_date') or soup.select_one('.date')
         if date_tag:
             full_text = date_tag.get_text(" ", strip=True)
             
-            # 조회수 숫자 추출
             view_match = re.search(r'조회(?:수)?\s*[:]?\s*(\d+)', full_text)
             if view_match:
                 data["univ_views"] = int(view_match.group(1))
 
-            # 날짜 패턴 추출 (2024.1.1, 2024-01-01 등 모두 허용)
             date_match = re.search(r'(\d{4})\s*[\.\-\/]\s*(\d{1,2})\s*[\.\-\/]\s*(\d{1,2})', full_text)
             if date_match:
                 y, m, d = date_match.groups()
-                try:
-                    data["date"] = datetime(int(y), int(m), int(d)).date()
-                except ValueError:
-                    logger.warning(f"⚠️ 날짜 변환 오류: {y}-{m}-{d}")
+                data["date"] = datetime(int(y), int(m), int(d)).date()
 
         # 3. 첨부파일
-        for a in soup.select('.wri_area.file a.link_file'):
+        for a in soup.select('.wri_area.file a.link_file, .file_area a'):
             f_link = a.get('href')
-            if f_link:
+            if f_link and not f_link.startswith("#"):
                 data["files"].append({
                     "name": a.get_text(strip=True),
                     "url": urljoin(url, f_link)
                 })
 
         # 4. 본문 및 이미지
-        content_div = soup.select_one('.tbl_view')
+        content_div = soup.select_one('.tbl_view') or soup.select_one('.content_view')
         if content_div:
+            # 이미지 절대경로 변환
             for img in content_div.find_all('img'):
-                if img.get('src'):
-                    data["images"].append(urljoin(url, img.get('src')))
+                src = img.get('src')
+                if src:
+                    data["images"].append(urljoin(url, src))
             
-            for p in content_div.find_all('p'):
+            # 텍스트 추출
+            for p in content_div.find_all(['p', 'div']):
                 text = p.get_text(strip=True)
                 if text: data["texts"].append(text)
         

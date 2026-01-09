@@ -1,94 +1,88 @@
 # app/routers/knu.py
-from fastapi import APIRouter, Depends, Query
+import json
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel
 
 from app.database.database import get_db
 from app.database.models import Notice, Device
 from app.services import knu_notice_service
 from app.services.scraper import scrape_notice_content
 from app.core.logger import get_logger
+# [New] 스키마 임포트
+from app.schemas import NoticeListResponse, NoticeDetailResponse, DeviceRegisterRequest
 
 router = APIRouter()
 logger = get_logger()
 
-# --------------------------------------------------------------------------
-# [기능 1] 공지사항 목록 조회 (검색/필터링 포함)
-# --------------------------------------------------------------------------
-@router.get("/notices")
+# 조회수 버퍼
+VIEW_COUNT_BUFFER = {}
+
+# [응답 모델 적용] List[NoticeListResponse] 형태로 나간다고 명시
+@router.get("/notices", response_model=List[NoticeListResponse])
 async def read_notices(
     category: str = "all",
     q: Optional[str] = Query(None, description="검색어"),
     page: int = 1,
-    sort_by: str = "date", # date(최신순) or views(인기순)
+    sort_by: str = "date",
     db: Session = Depends(get_db)
 ):
     limit = 20
     skip = (page - 1) * limit
     
-    # 서비스 계층에 검색 요청
-    results = knu_notice_service.search_notices_from_db(
+    results = knu_notice_service.search_notices(
         db, category, query=q, skip=skip, limit=limit, sort_by=sort_by
     )
     return results
 
-# --------------------------------------------------------------------------
-# [기능 2] 공지사항 상세 조회 & 조회수 카운팅
-# --------------------------------------------------------------------------
-# 조회수를 DB에 바로 쓰지 않고 모아두는 버퍼 ( {공지ID : 클릭수} )
-VIEW_COUNT_BUFFER = {}
-
-@router.get("/notice/detail")
+# [응답 모델 적용]
+@router.get("/notice/detail", response_model=NoticeDetailResponse)
 async def get_notice_detail(
     url: str, 
     notice_id: Optional[int] = None, 
     db: Session = Depends(get_db)
 ):
-    """
-    앱에서 공지를 클릭했을 때 호출됩니다.
-    1. 조회수를 메모리 버퍼에 +1 합니다.
-    2. 실시간 크롤링 데이터를 반환합니다.
-    """
-    # 조회수 버퍼링 (DB 부하 방지)
+    # 1. DB 정보 조회 (조회수 증가용)
+    notice_in_db = None
     if notice_id:
-        if notice_id in VIEW_COUNT_BUFFER:
-            VIEW_COUNT_BUFFER[notice_id] += 1
-        else:
-            VIEW_COUNT_BUFFER[notice_id] = 1
+        notice_in_db = db.query(Notice).filter(Notice.id == notice_id).first()
+        # 버퍼에 조회수 추가
+        VIEW_COUNT_BUFFER[notice_id] = VIEW_COUNT_BUFFER.get(notice_id, 0) + 1
 
-    # 실시간 상세 내용 크롤링
-    try:
-        content = await scrape_notice_content(url)
-        return content
-    except Exception as e:
-        logger.error(f"상세 조회 실패: {e}")
-        return {"error": str(e), "texts": []}
+    # 2. 실시간 크롤링
+    scraped = await scrape_notice_content(url)
+    if not scraped:
+        raise HTTPException(status_code=404, detail="내용을 불러올 수 없습니다.")
 
-# --------------------------------------------------------------------------
-# [기능 3] FCM 기기 등록 (앱 설치 시 호출)
-# --------------------------------------------------------------------------
-class DeviceRegisterRequest(BaseModel):
-    token: str          # FCM 토큰
-    keywords: str = None # 구독 키워드 (예: "장학,취업")
+    # 3. 응답 데이터 조립 (Pydantic 모델에 맞춤)
+    return {
+        "id": notice_id if notice_id else 0,
+        "title": scraped["title"],
+        "link": url,
+        "date": scraped["date"],
+        "category": notice_in_db.category if notice_in_db else "unknown",
+        "author": notice_in_db.author if notice_in_db else None,
+        "content": "\n\n".join(scraped["texts"]),
+        "images": scraped["images"], # 리스트 그대로 전달
+        "files": scraped["files"],   # 리스트 그대로 전달
+        "univ_views": scraped["univ_views"],
+        # 앱 조회수 = DB저장값 + 현재 버퍼값
+        "app_views": (notice_in_db.app_views if notice_in_db else 0) + VIEW_COUNT_BUFFER.get(notice_id, 0),
+        "crawled_at": notice_in_db.crawled_at if notice_in_db else None
+    }
 
+# [요청 모델 적용] Body를 DeviceRegisterRequest 스키마로 검증
 @router.post("/device/register")
 async def register_device(request: DeviceRegisterRequest, db: Session = Depends(get_db)):
-    """
-    앱 사용자 정보를 등록하거나 업데이트합니다.
-    """
-    # 이미 등록된 기기인지 확인
-    existing_device = db.query(Device).filter(Device.token == request.token).first()
+    existing = db.query(Device).filter(Device.token == request.token).first()
     
-    if existing_device:
-        # 기존 사용자면 키워드만 업데이트
-        existing_device.keywords = request.keywords
-        logger.info(f"🔄 기기 업데이트 (Token: {request.token[:10]}...)")
+    if existing:
+        existing.keywords = request.keywords
+        logger.info(f"🔄 기기 업데이트: {request.token[:8]}...")
     else:
-        # 신규 사용자 등록
         new_device = Device(token=request.token, keywords=request.keywords)
         db.add(new_device)
-        logger.info(f"✨ 새 기기 등록 (Token: {request.token[:10]}...)")
+        logger.info(f"✨ 새 기기 등록: {request.token[:8]}...")
     
     try:
         db.commit()
@@ -96,4 +90,4 @@ async def register_device(request: DeviceRegisterRequest, db: Session = Depends(
     except Exception as e:
         db.rollback()
         logger.error(f"❌ 기기 등록 실패: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail="Internal Server Error")
