@@ -1,114 +1,139 @@
+# app/main.py
 import asyncio
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from app.database.database import engine, Base, SessionLocal
-from app.services import knu_notice_service
-from app.routers import knu
-from app.core.config import NOTICE_CONFIGS
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers.knu import VIEW_COUNT_BUFFER # 버퍼 가져오기
-from app.database.models import Notice 
-from app.services import knu_notice_service
 
+# [DB 및 설정]
+from app.database.database import engine, Base, SessionLocal
+from app.database.models import Notice 
+from app.core.config import NOTICE_CONFIGS
+from app.core.logger import get_logger
+
+# [서비스 및 라우터]
+from app.services import knu_notice_service
+from app.routers import knu  # 라우터 등록을 위해 필요
+from app.routers.knu import VIEW_COUNT_BUFFER  # [중요] 조회수 버퍼 가져오기
+
+# 로거 설정
+logger = get_logger()
+
+# DB 테이블 자동 생성 (없으면 만듦)
 Base.metadata.create_all(bind=engine)
+
+# 스케줄러 생성
 scheduler = AsyncIOScheduler()
-# [전역 변수] 실행 중인 초기화 태스크를 추적하기 위함
 init_task = None
 
-
-async def sync_view_counts_to_db():
+# --------------------------------------------------------------------------
+# [기능 1] 조회수 동기화 (메모리 -> DB)
+# --------------------------------------------------------------------------
+async def sync_view_counts():
     """
-    메모리에 쌓인 조회수를 DB에 한 번에 업데이트(Flush)하고 버퍼를 비웁니다.
+    사용자들이 클릭해서 메모리(VIEW_COUNT_BUFFER)에 쌓인 조회수를 
+    실제 DB(Notices 테이블)에 반영하고, 메모리를 비웁니다.
     """
     if not VIEW_COUNT_BUFFER:
         return
 
-    print(f"💾 [조회수 동기화] {len(VIEW_COUNT_BUFFER)}개 게시글 조회수 반영 중...")
+    # 데이터 충돌 방지를 위해 복사본을 만들고 원본은 즉시 비움
+    buffer_copy = VIEW_COUNT_BUFFER.copy()
+    VIEW_COUNT_BUFFER.clear()
+
+    logger.info(f"💾 [조회수 동기화] {len(buffer_copy)}개 게시글 데이터 반영 중...")
     
     db = SessionLocal()
     try:
-        # 하나씩 업데이트 (Bulk Update가 더 좋지만 SQLite/ORM에서는 이 정도도 충분)
-        for notice_id, count in VIEW_COUNT_BUFFER.items():
+        for notice_id, count in buffer_copy.items():
+            # 해당 게시글을 찾아 조회수 증가
             notice = db.query(Notice).filter(Notice.id == notice_id).first()
             if notice:
                 notice.app_views += count
         
         db.commit()
-        # 반영 완료 후 버퍼 초기화
-        VIEW_COUNT_BUFFER.clear()
-        print("✅ 조회수 반영 완료")
+        logger.info("✅ 조회수 DB 반영 완료")
     except Exception as e:
-        print(f"❌ 조회수 반영 실패: {e}")
+        logger.error(f"❌ 조회수 반영 실패: {e}")
         db.rollback()
     finally:
         db.close()
 
+# --------------------------------------------------------------------------
+# [기능 2] 정기 작업 스케줄러
+# --------------------------------------------------------------------------
 async def scheduled_job():
-    # ... (기존과 동일한 크롤링 로직) ...                            
-    print("🚀 [스케줄러] 데이터 동기화 작업 시작...")
+    """
+    주기적으로 실행되는 작업 모음입니다.
+    1. 조회수 DB 저장
+    2. 학교 공지사항 크롤링 및 알림 발송
+    """
+    logger.info("🚀 [스케줄러] 정기 작업 시작...")
+    
     db = SessionLocal()
     categories = list(NOTICE_CONFIGS.keys())
+    
     try:
-        # [팁] 서버 뜨자마자 CPU 튀는 것 방지 (5초 대기)
-        await asyncio.sleep(5) 
-        
+        # 1. 조회수 먼저 저장 (빈도가 잦을수록 데이터 유실 위험 적음)
+        await sync_view_counts()
+
+        # 2. 카테고리별 크롤링 실행
         for cat in categories:
             await knu_notice_service.crawl_and_sync_notices(db, cat)
+            
     except Exception as e:
-        # [중요] 여기서 에러나면 개발자에게 알림 가는 로직 필요 (현재는 로그만)
-        print(f"❌ 작업 중 치명적 오류: {e}")
+        logger.critical(f"❌ [스케줄러] 작업 중 치명적 오류: {e}")
     finally:
         db.close()
-    await sync_view_counts_to_db()
-    print("🏁 [스케줄러] 데이터 동기화 완료!")
+    
+    logger.info("🏁 [스케줄러] 모든 작업 완료!")
 
+# --------------------------------------------------------------------------
+# [기능 3] 서버 수명주기 (Lifecycle) 관리
+# --------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global init_task
+    logger.info("⚡ API Server Started! (K-Now Backend)")
     
-    # 1. 스케줄러 시작
+    # 1. 스케줄러 등록 (30분마다 자동 실행)
     scheduler.add_job(scheduled_job, 'interval', minutes=30)
     scheduler.start()
     
-    # 2. 백그라운드 태스크 시작 (변수에 담아둠)
-    print("⚡ 서버 시작! 5초 뒤 초기 데이터 수집을 시작합니다...")
-    init_task = asyncio.create_task(scheduled_job())
+    # 2. 서버 켜지자마자 초기 데이터 수집 예약 (5초 뒤 실행)
+    logger.info("⏳ 초기 데이터 수집 태스크 예약됨")
+    init_task = asyncio.create_task(initial_crawl())
     
     yield  # 서버 가동 중...
     
-    # 3. [보완] 서버 종료 시 안전하게 정리
-    print("🛑 서버 종료 중... 진행 중인 작업 확인...")
+    # 3. 서버 종료 시 정리 작업
+    logger.info("🛑 서버 종료 중... 남은 조회수 데이터 저장")
+    await sync_view_counts()
     scheduler.shutdown()
     
-    # 초기화 작업이 아직 안 끝났으면 기다릴지, 취소할지 결정
-    # 여기서는 "취소(Cancel)"하는 것이 일반적이지만, 중요하면 await init_task로 기다릴 수도 있음
+    # 진행 중인 초기화 작업 취소
     if init_task and not init_task.done():
-        print("⚠️ 초기화 작업이 아직 진행 중입니다. 강제 종료합니다.")
         init_task.cancel()
         try:
             await init_task
         except asyncio.CancelledError:
-            print("✅ 초기화 작업이 안전하게 취소되었습니다.")
+            pass
 
+async def initial_crawl():
+    await asyncio.sleep(5)
+    await scheduled_job()
+
+# FastAPI 앱 생성
 app = FastAPI(lifespan=lifespan)
-app.include_router(knu.router, prefix="/api/knu", tags=["knu"])
+
+# 라우터 등록 (API 주소 연결)
+app.include_router(knu.router, prefix="/api/knu", tags=["KNU"])
+
+# CORS 설정 (프론트엔드 통신 허용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 실제 배포시에는 ["https://myapp.com"] 등으로 변경
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ... (나머지 코드 동일)
-
-# [NEW] 강제 업데이트 버튼
-@app.get("/force-update")
-async def force_update():
-    await scheduled_job()
-    return {"message": "전체 카테고리 강제 업데이트 완료! 이제 목록을 새로고침 해보세요."}
-
-@app.get("/")
-def read_root():
-    return {"message": "Knoti API Server Running"}
