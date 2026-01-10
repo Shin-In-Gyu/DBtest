@@ -16,6 +16,8 @@ class NoticeBase(BaseModel):
 # [응답용] 목록 조회 시 나갈 데이터 (본문 제외, ID 포함)
 class NoticeListResponse(NoticeBase):
     id: int
+    # [New] 내가 스크랩한 글인지 표시 (프론트엔드에서 ★ 색칠용)
+    is_scraped: bool = False 
     
     class Config:
         # ORM(DB객체)를 Pydantic 모델로 변환 허용
@@ -33,7 +35,9 @@ class NoticeDetailResponse(NoticeBase):
     images: List[str] = []
     files: List[FileItem] = []
     crawled_at: Optional[datetime] = None
-
+    # [New] 상세 화면에서도 스크랩 여부를 알아야 하므로 추가
+    is_scraped: bool = False
+    summary: Optional[str] = None # [New] 요약본 필드 추가(Null 일 수 있음)
     class Config:
         from_attributes = True
 
@@ -41,3 +45,7 @@ class NoticeDetailResponse(NoticeBase):
 class DeviceRegisterRequest(BaseModel):
     token: str
     keywords: Optional[str] = None
+
+# [New] [요청용] 스크랩 토글(저장/취소) 요청 시 받을 데이터
+class ScrapRequest(BaseModel):
+    token: str # 누가 스크랩을 눌렀는지 식별하기 위해 토큰을 받습니다.

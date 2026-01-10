@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Date
+# app/database/models.py
+from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from .database import Base
 
@@ -30,6 +32,9 @@ class Notice(Base):
     
     crawled_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # [New] AI가 요약한 3줄 내용을 저장할 컬럼
+    summary = Column(Text, nullable=True)
+
 class Device(Base):
     """
     사용자 기기 테이블
@@ -40,4 +45,21 @@ class Device(Base):
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String, unique=True, index=True) # 기기 고유 토큰
     keywords = Column(String, nullable=True)        # 예: "장학,컴공"
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Scrap(Base):
+    """
+    [New] 즐겨찾기(Scrap) 테이블
+    - 학생(Device)과 공지(Notice)의 연결 고리 역할을 합니다. (N:M 관계 해소)
+    """
+    __tablename__ = "scraps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # ForeignKey(외래키): "이 숫자는 devices 테이블의 id를 가리킵니다"라는 뜻입니다.
+    # ondelete="CASCADE": 만약 학생 정보가 삭제되거나 공지글이 지워지면, 
+    #                     이 스크랩 데이터도 좀비처럼 남지 않고 같이 사라지게 설정합니다.
+    device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    notice_id = Column(Integer, ForeignKey("notices.id", ondelete="CASCADE"), index=True)
+    
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
