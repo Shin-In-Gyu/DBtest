@@ -12,49 +12,42 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # [설정] SSL 경고 제거
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# [중요] Config 로드
+# [Import]
 from app.core.config import NOTICE_CONFIGS
-from app.database.database import engine, Base, AsyncSessionLocal
+from app.database.database import engine, Base, AsyncSessionLocal, init_db
 from app.core.logger import get_logger
+from app.core.http import close_client, get_client
 from app.services import knu_notice_service, notification_service
 from app.routers import knu
 
 logger = get_logger()
 scheduler = AsyncIOScheduler()
 
-async def init_db():
-    """DB 테이블 비동기 생성"""
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("🗄️ 데이터베이스 초기화 완료")
-    except Exception as e:
-        logger.critical(f"🔥 DB 초기화 실패: {e}")
-
 async def scheduled_crawl_job():
-    """정기 크롤링 작업"""
     logger.info("🚀 [스케줄러] 정기 크롤링 시작")
     categories = list(NOTICE_CONFIGS.keys())
     
     for i, cat in enumerate(categories):
-        # 세션을 루프 밖에서 열지 않고, 각 크롤링 함수 내부나 여기서 짧게 엽니다.
         async with AsyncSessionLocal() as db:
             try:
                 await knu_notice_service.crawl_and_sync_notices(db, cat)
             except asyncio.CancelledError:
-                logger.warning(f"🛑 [{cat}] 작업 취소됨 (서버 종료)")
-                raise # 취소 신호가 오면 작업을 즉시 중단
+                logger.warning(f"🛑 [{cat}] 작업 취소됨")
+                raise # [중요] 취소 신호를 상위로 전파해야 즉시 종료됨
             except Exception as e:
                 logger.error(f"❌ [{cat}] 크롤링 실패: {e}")
         
-        # 서버 종료 신호 확인을 위해 sleep을 잘게 쪼개거나 그대로 둠
-        if i < len(categories) - 1:
-            await asyncio.sleep(2)
-            
+        # [Fix] sleep 중에도 취소 신호 체크
+        try:
+            if i < len(categories) - 1:
+                await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            logger.warning("🛑 대기 중 작업 취소됨")
+            raise
+
     logger.info("🏁 [스케줄러] 크롤링 완료")
 
 async def initial_crawl():
-    """서버 시작 후 5초 뒤 첫 크롤링"""
     try:
         logger.info("⏳ 초기 크롤링 대기 중 (5초)...")
         await asyncio.sleep(5)
@@ -66,6 +59,9 @@ async def initial_crawl():
 async def lifespan(app: FastAPI):
     # ---------------- [시작 시점] ----------------
     await init_db()
+    try:
+        get_client() # 클라이언트 웜업
+    except: pass
     
     logger.info("⚡ API Server Started! (K-Now Backend)")
     notification_service.initialize_firebase()
@@ -81,21 +77,24 @@ async def lifespan(app: FastAPI):
     # ---------------- [종료 시점] ----------------
     logger.info("🛑 서버 종료 시퀀스 시작...")
     
-    # 1. 진행 중인 태스크 취소
+    # 1. 진행 중인 태스크 취소 (타임아웃 적용)
     if not crawl_task.done():
         crawl_task.cancel()
         try:
-            await crawl_task
-        except asyncio.CancelledError:
-            pass
+            # [핵심] 5초 안에 안 꺼지면 그냥 포기하고 다음 단계로 진행 (무한 대기 방지)
+            await asyncio.wait_for(crawl_task, timeout=5.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            logger.warning("⚠️ 크롤링 작업 강제 종료됨 (Timeout)")
+        except Exception as e:
+            logger.error(f"⚠️ 작업 종료 중 에러: {e}")
 
     # 2. 스케줄러 종료
     if scheduler.running:
         scheduler.shutdown(wait=False)
         
-    # 3. [핵심] DB 커넥션 풀 강제 종료 (이게 없으면 프로세스가 안 끝날 수 있음)
-    logger.info("🔌 DB 연결 해제 중...")
-    await engine.dispose()
+    # 3. 리소스 정리
+    await close_client() # HTTP 클라이언트 종료
+    await engine.dispose() # DB 연결 종료
     
     logger.info("👋 서버 리소스가 정리되었습니다.")
 
@@ -109,16 +108,12 @@ app.add_middleware(
 )
 
 if __name__ == "__main__":
-    try:
-        uvicorn.run(
-            "app.main:app", 
-            host="0.0.0.0", 
-            port=8000, 
-            reload=True 
-        )
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # [핵심] Uvicorn 종료 후에도 안 꺼지는 좀비 프로세스 강제 살처분
-        print("\nProcess finished. Forcing exit...")
-        sys.exit(0)
+    # [핵심] try-except KeyboardInterrupt 제거 -> Uvicorn에게 신호 처리 위임
+    # uvicorn.run 자체가 내부적으로 시그널 핸들링을 하므로, 
+    # 외부에서 감싸면 충돌이 일어나 터미널이 먹통될 수 있음.
+    uvicorn.run(
+        "app.main:app", 
+        host="0.0.0.0", 
+        port=8000, 
+        reload=True 
+    )

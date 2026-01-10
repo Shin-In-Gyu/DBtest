@@ -138,78 +138,18 @@ async def get_notice_detail(
 # --------------------------------------------------------------------------
 # 3. AI 요약 생성 (Async Refactored) - 에러 발생하던 부분
 # --------------------------------------------------------------------------
+
 @router.post("/notice/{notice_id}/summary")
 async def create_notice_summary(notice_id: int, db: AsyncSession = Depends(get_db)):
     try:
-        # 1. 공지사항 조회
-        stmt = select(Notice).filter(Notice.id == notice_id)
-        result = await db.execute(stmt)
-        notice = result.scalars().first()
-
-        if not notice:
-            raise HTTPException(status_code=404, detail="공지사항을 찾을 수 없습니다.")
-
-        # 2. 이미 요약된 내용이 있으면 반환
-        if notice.summary:
-            return {"summary": notice.summary}
-
-        # -----------------------------------------------------------
-        # [핵심 수정] 본문이 비어있으면(50자 미만) 즉시 스크래핑 시도
-        # -----------------------------------------------------------
-        content_to_use = notice.content or ""
-        image_list = []
-
-        # DB에 저장된 이미지가 있으면 로드
-        if notice.images:
-            try:
-                raw_images = str(notice.images).strip()
-                if raw_images and raw_images.lower() != "none":
-                    image_list = json.loads(raw_images)
-            except:
-                image_list = []
-
-        # 본문이 너무 짧으면 원문 링크에서 다시 긁어옴
-        if len(content_to_use) < 50:
-            logger.info(f"🔍 [Gemini] 본문 누락됨. 실시간 스크래핑 시도: {notice.link}")
-            scraped_data = await scrape_notice_content(notice.link)
-            
-            if scraped_data:
-                # 스크래핑 성공 시 변수 업데이트
-                content_to_use = "\n\n".join(scraped_data["texts"])
-                image_list = scraped_data["images"]
-                
-                # DB에도 업데이트 (다음 번 요청을 위해)
-                notice.content = content_to_use
-                notice.images = json.dumps(image_list, ensure_ascii=False)
-                # (주의: 여기서 commit은 하지 않고, 마지막에 요약 저장할 때 한 번에 합니다)
-
-        # -----------------------------------------------------------
-
-        # 3. 그래도 내용이 없으면 에러 처리
-        if len(content_to_use) < 10 and not image_list:
-             # AI에게 보낼 내용이 정말 없는 경우
-             return {"summary": "본문이 이미지나 첨부파일로만 구성되어 요약할 텍스트가 없습니다."}
-
-        # 4. AI 호출
-        logger.info(f"🤖 [Gemini] 요약 요청: ID {notice_id} (Text Len: {len(content_to_use)})")
-        summary_text = await generate_summary(content_to_use, image_list)
-
-        if not summary_text:
-             raise HTTPException(status_code=500, detail="AI 응답 실패")
-
-        # 5. 결과 저장 및 커밋
-        notice.summary = summary_text
-        await db.commit()
-        
-        return {"summary": summary_text}
-
-    except HTTPException as http_ex:
-        raise http_ex
+        # 서비스 계층으로 로직 위임
+        summary = await knu_notice_service.get_or_create_summary(db, notice_id)
+        return {"summary": summary}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="공지사항을 찾을 수 없습니다.")
     except Exception as e:
-        await db.rollback()
-        logger.error(f"🔥 [Summary Error] {e}")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="서버 내부 오류 발생")
+        logger.error(f"Summary Error: {e}")
+        raise HTTPException(status_code=500, detail="서버 내부 오류")
 # --------------------------------------------------------------------------
 # 4. 기기 등록 및 스크랩 API (Async Refactored)
 # --------------------------------------------------------------------------

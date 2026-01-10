@@ -5,7 +5,7 @@ import asyncio
 from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-
+from app.services.ai_service import generate_summary
 from app.core.config import get_urls 
 from app.core.http import fetch_html
 from app.database.models import Notice
@@ -147,6 +147,51 @@ async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
             else:
                 logger.error(f"🔥 DB 커밋 실패: {e}")
 
+async def get_or_create_summary(db: AsyncSession, notice_id: int) -> str:
+    """
+    공지사항 요약을 가져오거나, 없으면 생성(필요시 재크롤링)하여 저장하는 비즈니스 로직
+    """
+    stmt = select(Notice).where(Notice.id == notice_id)
+    result = await db.execute(stmt)
+    notice = result.scalars().first()
+    
+    if not notice:
+        raise ValueError("Notice not found")
+        
+    if notice.summary:
+        return notice.summary
+
+    # 본문이 너무 짧으면(50자 미만) 재크롤링 시도
+    content_to_use = notice.content or ""
+    image_list = []
+    
+    if notice.images:
+        try:
+            image_list = json.loads(str(notice.images))
+        except:
+            pass
+
+    if len(content_to_use) < 50:
+        logger.info(f"🔍 [Auto-Rescrape] ID:{notice_id} 본문 보강 시도")
+        # [주의] scrape_notice_content 내부에서도 get_client()를 쓰도록 scraper.py 수정 필요
+        # 현재는 scraper.py가 내부적으로 httpx를 쓴다면 수정 권장, 여기선 기존 함수 호출
+        scraped_data = await scrape_notice_content(notice.link)
+        
+        if scraped_data:
+            content_to_use = "\n\n".join(scraped_data["texts"])
+            image_list = scraped_data["images"]
+            
+            notice.content = content_to_use
+            notice.images = json.dumps(image_list, ensure_ascii=False)
+
+    # AI 요약 생성
+    summary = await generate_summary(content_to_use, image_list)
+    
+    # DB 저장
+    notice.summary = summary
+    await db.commit()
+    
+    return summary
 async def safe_scrape_with_semaphore(url: str):
     """세마포어를 이용한 안전한 스크래핑"""
     async with SCRAPE_SEMAPHORE:

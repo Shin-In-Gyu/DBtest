@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from dotenv import load_dotenv
+from app.core.logger import logger
 
 load_dotenv()
 
@@ -41,3 +42,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # [New] 서버 종료 시 엔진을 닫아주는 함수
 async def close_db_connection():
     await engine.dispose()
+
+
+
+async def init_db():
+    """DB 테이블 비동기 생성"""
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("🗄️ 데이터베이스 초기화 완료")
+    except Exception as e:
+        logger.critical(f"🔥 DB 초기화 실패: {e}")
