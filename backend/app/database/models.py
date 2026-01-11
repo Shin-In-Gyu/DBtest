@@ -1,17 +1,18 @@
 # app/database/models.py
 import json
-from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey, Table, Index, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, String, Text, DateTime, Date, ForeignKey, Table, Index, UniqueConstraint, Column
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
-from datetime import datetime, timezone
+# [수정] date 필드명과 충돌 방지를 위해 alias(별칭) 사용
+from datetime import datetime, date as DateType, timezone 
+from typing import List, Optional, Dict, Any
 from .database import Base
 
-# [유틸리티] JSON 타입 처리기 (SQLite 호환용)
-# 원래: 없음 (그냥 Text로 저장하고 뷰에서 json.loads 함)
-# 변경: TypeDecorator 사용
-# 이유: DB에 넣을 땐 자동으로 문자열로, 꺼낼 땐 자동으로 리스트로 변환해주기 위함
+# [유틸리티] JSON 타입 처리기
 class JSONEncodedDict(TypeDecorator):
     impl = Text
+    cache_ok = True
+
     def process_bind_param(self, value, dialect):
         if value is None: return "[]"
         return json.dumps(value, ensure_ascii=False)
@@ -21,8 +22,8 @@ class JSONEncodedDict(TypeDecorator):
         try: return json.loads(value)
         except: return []
 
-# [New] N:M 관계 테이블 (기기 <-> 키워드)
-# 설명: "1번 기기가 5번 키워드(장학)를 구독함" 같은 정보를 저장
+# [수정] Table 정의 내에서는 mapped_column 대신 기존 Column 사용
+# Pylance 오류: "MappedColumn[Any]" cannot be assigned to parameter "args" of type "SchemaItem" 해결
 device_keywords = Table(
     'device_keywords',
     Base.metadata,
@@ -33,43 +34,41 @@ device_keywords = Table(
 class Notice(Base):
     __tablename__ = "notices"
     
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
     
-    # [변경 1] unique=True 제거! (이제 같은 링크가 여러 카테고리에 존재 가능)
-    link = Column(String, index=True) 
+    link: Mapped[str] = mapped_column(String, index=True) 
     
-    date = Column(Date, nullable=True)
-    content = Column(Text)
+    # [수정] 타입 힌트 충돌 해결 (date -> DateType)
+    # Pylance 오류: Type of "date" could not be determined because it refers to itself 해결
+    date: Mapped[Optional[DateType]] = mapped_column(Date, nullable=True)
     
-    images = Column(JSONEncodedDict, default=[])
-    files = Column(JSONEncodedDict, default=[])
+    content: Mapped[str] = mapped_column(Text)
     
-    category = Column(String, index=True)
-    author = Column(String, nullable=True)
+    images: Mapped[List[str]] = mapped_column(JSONEncodedDict, default=[])
+    files: Mapped[List[Dict[str, Any]]] = mapped_column(JSONEncodedDict, default=[])
     
-    univ_views = Column(Integer, default=0)
-    app_views = Column(Integer, default=0)
+    category: Mapped[str] = mapped_column(String, index=True)
+    author: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
-    crawled_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    summary = Column(Text, nullable=True)
+    univ_views: Mapped[int] = mapped_column(Integer, default=0)
+    app_views: Mapped[int] = mapped_column(Integer, default=0)
+    
+    crawled_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # [변경 2] (링크 + 카테고리) 조합이 유일해야 함을 명시
-    # 예: (linkA, univ) O, (linkA, academic) O, (linkA, univ) X (중복)
     __table_args__ = (
         Index('idx_category_date', 'category', 'date'),
         UniqueConstraint('link', 'category', name='uix_link_category'),
     )
 
 class Keyword(Base):
-    """[New] 키워드 마스터 테이블 (예: id=1, word='장학')"""
     __tablename__ = "keywords"
     
-    id = Column(Integer, primary_key=True, index=True)
-    word = Column(String, unique=True, index=True) # 중복 방지
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    word: Mapped[str] = mapped_column(String, unique=True, index=True)
 
-    # 역참조: 이 키워드를 구독 중인 기기들 찾기
-    subscribed_devices = relationship(
+    subscribed_devices: Mapped[List["Device"]] = relationship(
         "Device",
         secondary=device_keywords,
         back_populates="subscriptions"
@@ -78,13 +77,11 @@ class Keyword(Base):
 class Device(Base):
     __tablename__ = "devices"
     
-    id = Column(Integer, primary_key=True, index=True)
-    token = Column(String, unique=True, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    token: Mapped[str] = mapped_column(String, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # [변경] keywords 컬럼(String) 삭제 -> subscriptions 관계(List)로 대체
-    # 이유: "장학" 검색 시 LIKE %장학% 보다 훨씬 빠르고 정확함
-    subscriptions = relationship(
+    subscriptions: Mapped[List["Keyword"]] = relationship(
         "Keyword",
         secondary=device_keywords,
         back_populates="subscribed_devices"
@@ -92,7 +89,8 @@ class Device(Base):
 
 class Scrap(Base):
     __tablename__ = "scraps"
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), index=True)
-    notice_id = Column(Integer, ForeignKey("notices.id", ondelete="CASCADE"), index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    device_id: Mapped[int] = mapped_column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    notice_id: Mapped[int] = mapped_column(Integer, ForeignKey("notices.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
