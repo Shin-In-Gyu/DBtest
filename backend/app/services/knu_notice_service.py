@@ -171,7 +171,7 @@ async def get_or_create_summary(db: AsyncSession, notice_id: int) -> str:
         except:
             pass
 
-    if len(content_to_use) < 50:
+    if len(content_to_use) < 2:
         logger.info(f"🔍 [Auto-Rescrape] ID:{notice_id} 본문 보강 시도")
         # [주의] scrape_notice_content 내부에서도 get_client()를 쓰도록 scraper.py 수정 필요
         # 현재는 scraper.py가 내부적으로 httpx를 쓴다면 수정 권장, 여기선 기존 함수 호출
