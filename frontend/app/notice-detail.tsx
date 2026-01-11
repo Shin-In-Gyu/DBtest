@@ -1,17 +1,11 @@
+// frontend/app/notice-detail.tsx
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, Linking, Dimensions } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
+import { getKnuNoticeDetail, NoticeDetail } from '../api/knuNotice'; // [수정] API 모듈 임포트
 
 // 화면 너비 (이미지 비율 조정을 위해)
 const { width } = Dimensions.get('window');
-
-interface NoticeDetail {
-  title: string;
-  texts: string[];
-  images: string[];
-  files: { name: string; url: string }[];
-  error?: string;
-}
 
 export default function NoticeDetailScreen() {
   const params = useLocalSearchParams();
@@ -21,18 +15,19 @@ export default function NoticeDetailScreen() {
   const [data, setData] = useState<NoticeDetail | null>(null);
 
   useEffect(() => {
-    fetchDetail();
-  }, []);
+    if (noticeUrl) {
+      fetchDetail();
+    }  
+  }, [noticeUrl]);
 
   const fetchDetail = async () => {
     try {
-      // [주의] 실제 테스트 시 localhost 대신 내 IP주소 사용 (예: 192.168.0.x:8000)
-      // Android 에뮬레이터는 10.0.2.2:8000
-      const apiUrl = `http://localhost:8000/knu/notice/detail?url=${encodeURIComponent(noticeUrl)}`;
-      const response = await fetch(apiUrl);
-      const json = await response.json();
-      setData(json);
+      setLoading(true);
+      // [수정] 하드코딩된 fetch 제거하고 중앙화된 API 함수 사용
+      const result = await getKnuNoticeDetail(noticeUrl);
+      setData(result);
     } catch (e) {
+      console.error(e);
       Alert.alert('오류', '데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
@@ -40,8 +35,9 @@ export default function NoticeDetailScreen() {
   };
 
   const handleFileDownload = (url: string) => {
-    // PDF 등 첨부파일은 외부 브라우저나 뷰어로 연결
-    Linking.openURL(url);
+    Linking.openURL(url).catch(err => 
+      Alert.alert("오류", "파일을 열 수 없습니다.")
+    );
   };
 
   if (loading) {
@@ -53,11 +49,10 @@ export default function NoticeDetailScreen() {
     );
   }
 
-  if (!data || data.error) {
+  if (!data) {
     return (
       <View style={styles.center}>
         <Text>내용을 표시할 수 없습니다.</Text>
-        <Text style={{fontSize: 12, color: '#999'}}>{noticeUrl}</Text>
       </View>
     );
   }
@@ -69,10 +64,11 @@ export default function NoticeDetailScreen() {
       {/* 1. 제목 영역 */}
       <View style={styles.header}>
         <Text style={styles.title}>{data.title}</Text>
+        {/* 날짜 정보 등이 있다면 여기에 추가 가능 */}
       </View>
 
-      {/* 2. 첨부파일 영역 (있을 경우에만) */}
-      {data.files.length > 0 && (
+      {/* 2. 첨부파일 영역 */}
+      {data.files && data.files.length > 0 && (
         <View style={styles.fileSection}>
           <Text style={styles.sectionTitle}>첨부파일</Text>
           {data.files.map((file, idx) => (
@@ -83,23 +79,26 @@ export default function NoticeDetailScreen() {
         </View>
       )}
 
-      {/* 3. 본문 텍스트 및 이미지 혼합 배치 */}
+      {/* 3. 본문 텍스트 및 이미지 */}
       <View style={styles.content}>
-        {/* 이미지가 있으면 먼저 크게 보여주거나, 텍스트 사이사이에 넣을 수 있음.
-            여기서는 텍스트 -> 이미지 순서로 배치 (단순화) */}
-        
-        {data.texts.map((text, idx) => (
-           <Text key={idx} style={styles.bodyText}>{text}</Text>
+        {/* 백엔드 응답 구조에 맞게 렌더링 (texts 배열 사용) */}
+        {data.texts?.map((text, idx) => (
+           <Text key={`txt-${idx}`} style={styles.bodyText}>{text}</Text>
         ))}
 
-        {data.images.map((imgUrl, idx) => (
+        {data.images?.map((imgUrl, idx) => (
           <Image 
-            key={idx} 
+            key={`img-${idx}`} 
             source={{ uri: imgUrl }} 
             style={styles.contentImage}
-            resizeMode="contain" // 비율 유지
+            resizeMode="contain" 
           />
         ))}
+        
+        {/* texts/images가 없고 content만 있는 경우(구조 대비) */}
+        {!data.texts && data.content && (
+           <Text style={styles.bodyText}>{data.content}</Text>
+        )}
       </View>
 
     </ScrollView>
@@ -152,7 +151,7 @@ const styles = StyleSheet.create({
   },
   contentImage: {
     width: '100%', 
-    height: 300, // 높이는 이미지 비율에 따라 동적으로 조절하면 더 좋음 (AutoHeightImage 라이브러리 추천)
+    height: 300, 
     marginBottom: 20,
     borderRadius: 8,
     backgroundColor: '#eee'

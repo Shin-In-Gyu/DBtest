@@ -9,11 +9,11 @@ export default function NoticeCard({
   onPress,
 }: {
   item: NoticeListItem;
-  onPress: (detailUrl: string) => void;
+  onPress: (link: string) => void;
 }) {
   return (
     <Pressable
-      onPress={() => onPress(item.detailUrl)}
+      onPress={() => onPress(item.link)}
       style={({ pressed }) => [s.card, pressed && s.pressed]}
     >
       <Text style={s.title} numberOfLines={2}>

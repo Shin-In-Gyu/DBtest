@@ -1,28 +1,25 @@
+// frontend/constants/index.ts
 import { Category } from "@/types";
 
 const colors = {
   KNU: "#006DB8",
   WHITE: "#fff",
   BLACK: "#000",
+  GRAY: "#F2F2F2",
+  TEXT_GRAY: "#888",
 };
 
-const category: { general: Category[]; dept: Category[] } = {
-  general: [
-    { id: "c1", label: "학사", icon: "school-outline" },
-    { id: "c2", label: "취창업", icon: "briefcase-outline" },
-    { id: "c3", label: "국제", icon: "earth-outline" },
-    { id: "c4", label: "장학", icon: "ribbon-outline" },
-    { id: "c5", label: "도서관", icon: "library-outline" },
-    { id: "c6", label: "학생", icon: "leaf-outline" },
-    { id: "c7", label: "산학", icon: "flask-outline" },
-    { id: "c8", label: "일반", icon: "document-text-outline" },
-  ],
-  dept: [
-    { id: "d1", label: "컴공", icon: "laptop-outline" },
-    { id: "d2", label: "공지", icon: "megaphone-outline" },
-    { id: "d3", label: "세미나", icon: "people-outline" },
-  ],
-};
+// [수정] 요청하신 탭 메뉴 구성
+// id 값은 백엔드의 notices.json 키값과 일치해야 데이터가 나옵니다.
+const categories = [
+  { id: "all", label: "전체" },
+  { id: "academic", label: "학사" },
+  { id: "scholar", label: "장학" },
+  { id: "learning", label: "학습/상담" }, // 백엔드 설정 확인 필요 (learning or counsel)
+  { id: "job", label: "취창업" },
+  { id: "library", label: "도서관" },
+  { id: "daeple", label: "대플" },      // 백엔드 설정 확인 필요
+  { id: "charm", label: "참인재" },     // 백엔드 설정 확인 필요
+];
 
-export { category, colors };
-
+export { categories, colors };
