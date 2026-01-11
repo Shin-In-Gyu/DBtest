@@ -24,72 +24,86 @@ async def scrape_notice_content(url: str):
             "images": [], "files": [], "univ_views": 0
         }
 
-        # 1. 제목 (도서관 Sponge 구조 우선)
+        # -----------------------------------------------------------
+        # 1. 제목 추출
+        # -----------------------------------------------------------
         title_tag = (
-            soup.select_one('.sponge-page-guide h4') or # 도서관 표준
+            soup.select_one('.board-view-title') or # [New] 대플
+            soup.select_one('.sponge-page-guide h4') or 
+            soup.select_one('.sponge-page-title-section h3') or
             soup.select_one('.subject') or 
-            soup.select_one('h3.title') or # 변형 대응
+            soup.select_one('h3.title') or 
             soup.select_one('h4.title') or
             soup.select_one('.tblw_subj') or 
             soup.select_one('.bo_v_tit') or
-            soup.select_one('.bbs_view_title') or
             soup.select_one('.view_title')
         )
+
         if title_tag:
-            # 내부에 span class="notice-cate" 같은게 있으면 제거
             for span in title_tag.select("span"):
                 span.decompose()
             data["title"] = title_tag.get_text(strip=True)
 
-        # 2. 날짜 및 조회수
+        # -----------------------------------------------------------
+        # 2. 날짜 및 조회수 추출
+        # -----------------------------------------------------------
         date_tag = (
-            soup.select_one('.sponge-page-guide .pull-right') or
-            soup.select_one('.sponge-board-view-info') or # 변형 대응
+            soup.select_one('.board-view-info') or       # [New] 대플
+            soup.select_one('.sponge-page-guide .pull-right') or 
+            soup.select_one('.sponge-board-view-info') or        
             soup.select_one('.tblw_date') or 
             soup.select_one('.date') or 
             soup.select_one('.writer_info') or
             soup.select_one('.bo_v_info') or
-            soup.select_one('.bbs_view_info') or
             soup.select_one('.view_info')
         )
         
         if date_tag:
             full_text = date_tag.get_text(" ", strip=True)
             
-            # 조회수
-            view_match = re.search(r'조회(?:수)?\s*[:]?\s*(\d+)', full_text)
+            view_match = re.search(r'(?:조회|View)(?:수)?\s*[:]?\s*(\d+)', full_text, re.IGNORECASE)
             if view_match:
                 data["univ_views"] = int(view_match.group(1))
-            else:
-                nums = re.findall(r'\d+', full_text)
-                if nums and len(nums) > 3: 
-                     data["univ_views"] = int(nums[-1])
-
-            # 날짜
+            
+            # 날짜 (Regex: 2025.10.20 등)
             date_match = re.search(r'(\d{4})\s*[\.\-\/]\s*(\d{1,2})\s*[\.\-\/]\s*(\d{1,2})', full_text)
             if date_match:
                 y, m, d = date_match.groups()
                 data["date"] = datetime(int(y), int(m), int(d)).date()
 
-        # 3. 첨부파일
-        # 도서관 파일은 보통 .sponge-page-guide 하위 a 태그 중 download가 포함된 것
-        file_selectors = '.sponge-page-guide a[href*="download"], .wri_area.file a.link_file, .file_area a, .bo_v_file a, .bbs_view_file a, .view_file a'
+        # -----------------------------------------------------------
+        # 3. 첨부파일 추출
+        # -----------------------------------------------------------
+        file_selectors = (
+            '.board-view-file a, '          # [New] 대플
+            '.sponge-page-guide a[href*="ownload"], '  
+            '.wri_area.file a.link_file, '
+            '.file_area a, '
+            '.bo_v_file a, '
+            '.view_file a'
+        )
         for a in soup.select(file_selectors):
             f_link = a.get('href')
-            if f_link and not f_link.startswith("#"):
+            
+            if isinstance(f_link, str) and not f_link.startswith("#") and "javascript" not in f_link:
                 f_name = a.get_text(strip=True) or "첨부파일"
-                data["files"].append({
-                    "name": f_name,
-                    "url": urljoin(url, f_link)
-                })
+                full_file_url = urljoin(url, f_link)
+                
+                if not any(f['url'] == full_file_url for f in data["files"]):
+                    data["files"].append({
+                        "name": f_name,
+                        "url": full_file_url
+                    })
 
-        # 4. 본문
+        # -----------------------------------------------------------
+        # 4. 본문 내용 추출
+        # -----------------------------------------------------------
         content_div = (
+            soup.select_one('.board-view-cont') or     # [New] 대플
             soup.select_one('.sponge-panel-white-remark') or 
             soup.select_one('.tbl_view') or 
             soup.select_one('.content_view') or 
             soup.select_one('.bo_v_con') or
-            soup.select_one('.bbs_view_content') or
             soup.select_one('.view_content')
         )
         
@@ -97,22 +111,24 @@ async def scrape_notice_content(url: str):
             # 이미지
             for img in content_div.find_all('img'):
                 src = img.get('src')
-                if src:
+                if isinstance(src, str):
                     data["images"].append(urljoin(url, src))
             
             # 스크립트 제거
-            for script in content_div(["script", "style"]):
+            for script in content_div(["script", "style", "iframe"]):
                 script.decompose()
             
             # 텍스트
             lines = []
-            for element in content_div.find_all(['p', 'div', 'br', 'li']):
+            for element in content_div.find_all(['p', 'div', 'br', 'li', 'h4', 'h5']):
                 text = element.get_text(strip=True)
                 if text:
                     lines.append(text)
             
             if not lines:
-                 data["texts"].append(content_div.get_text("\n", strip=True))
+                 raw_text = content_div.get_text("\n", strip=True)
+                 if raw_text:
+                    data["texts"].append(raw_text)
             else:
                  data["texts"] = lines
         

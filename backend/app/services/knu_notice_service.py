@@ -2,11 +2,13 @@
 import json
 import html as html_lib
 import asyncio
+import re
+from typing import Optional, List, Dict, Any, Union, cast
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-
+from urllib.parse import urljoin, urlparse, parse_qsl, urlencode
 from app.services.ai_service import generate_summary
 from app.core.config import get_urls, NOTICE_CONFIGS
 from app.core.http import fetch_html
@@ -17,7 +19,7 @@ from app.services.notification_service import send_keyword_notifications
 
 logger = get_logger()
 SCRAPE_SEMAPHORE = asyncio.Semaphore(3) 
-NOTIFICATION_TARGET_CATEGORIES = {"academic", "job", "scholar", "library"}
+NOTIFICATION_TARGET_CATEGORIES = {"academic", "job", "scholar", "library", "deeple"}
 
 async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
     config = NOTICE_CONFIGS.get(category)
@@ -30,11 +32,12 @@ async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
     
     if site_type == "library":
         candidates_map = await _crawl_library_list(category, config)
+    elif site_type == "daeple":  # [Fix] 대플(취창업) 함수 연결
+        candidates_map = await _crawl_daeple_list(category, config)
     else:
         candidates_map = await _crawl_main_cms_list(category)
 
     if not candidates_map:
-        # 로그 레벨을 Info로 낮춰 불필요한 걱정 방지 (데이터가 진짜 없을 수도 있음)
         logger.info(f"ℹ️ [{category}] 신규 공지사항 없음 (또는 목록 파싱 실패)")
         return
 
@@ -58,8 +61,30 @@ async def _crawl_main_cms_list(category: str):
 
     for a in items:
         try:
-            list_title = a.get_text(" ", strip=True) or a.get("title", "").strip()
-            raw_params = html_lib.unescape(a.get("data-params", "")).strip()
+            # [Fix] Pylance Error: 'strip' unknown for AttributeValueList
+            # 1. 텍스트 추출
+            text_title = a.get_text(" ", strip=True)
+            
+            # 2. title 속성 안전하게 추출 (List | str | None 대응)
+            attr_title_val = a.get("title", "")
+            if isinstance(attr_title_val, list):
+                attr_title_val = " ".join(attr_title_val)
+            elif attr_title_val is None:
+                attr_title_val = ""
+            
+            final_attr_title = str(attr_title_val).strip()
+            
+            # 3. 최종 제목 결정
+            list_title = text_title or final_attr_title
+            
+            # [Fix] Pylance Error: get() returns str | list | None 대응
+            raw_params_val = a.get("data-params", "")
+            if isinstance(raw_params_val, list):
+                raw_params_val = "".join(raw_params_val)
+            elif raw_params_val is None:
+                raw_params_val = ""
+            
+            raw_params = html_lib.unescape(str(raw_params_val)).strip()
             
             try: params = json.loads(raw_params)
             except: 
@@ -81,11 +106,11 @@ async def _crawl_main_cms_list(category: str):
 
 
 # --------------------------------------------------------------------------
-# [Logic B] 도서관 (lib.kangnam.ac.kr) 목록 파싱 (최종 수정)
+# [Logic B] 도서관 (lib.kangnam.ac.kr) 목록 파싱
 # --------------------------------------------------------------------------
 async def _crawl_library_list(category: str, config: dict):
-    domain = config.get("domain")
-    endpoint = config.get("list_endpoint") # /Board?n=notice
+    domain = str(config.get("domain", ""))
+    endpoint = str(config.get("url_path", "/Board?n=notice"))
     full_url = urljoin(domain, endpoint)
 
     logger.info(f"🔄 [{category}] 도서관 목록 가져오는 중... ({full_url})")
@@ -98,58 +123,143 @@ async def _crawl_library_list(category: str, config: dict):
 
     candidates = {}
     
-    # [핵심 변경] HTML 구조(dl, table 등) 무시하고 "Board/Detail" 링크만 찾음
-    # 사용자가 제공한 URL 패턴: /Board/Detail/20251218...
-    link_items = soup.select("a[href*='Board/Detail']")
+    items = soup.select("dl.onroad-board dd")
     
-    if not link_items:
-        # 혹시나 해서 상대경로 '../Board/Detail' 등도 고려
-        link_items = soup.select("a[href*='Detail']")
+    if not items:
+        items = soup.select("a[href*='Board/Detail']")
 
-    if not link_items:
-        logger.warning(f"⚠️ [{category}] 목록에서 상세 링크를 찾을 수 없습니다.")
+    if not items:
+        logger.warning(f"⚠️ [{category}] 목록 요소를 찾을 수 없습니다.")
         return {}
 
-    for a in link_items:
+    for item in items:
         try:
-            link_href = a.get("href")
-            if not link_href: continue
-            # URL에 'n=notice'가 포함되지 않은 경우(예: n=free)는 건너뜁니다.
-            # -----------------------------------------------------------
+            a_tag = item.find("a") if item.name == "dd" else item
+            if not a_tag: continue
+
+            link_href = a_tag.get("href")
+            if not isinstance(link_href, str):
+                continue
+
             if "n=notice" not in link_href:
                 continue
-            # [제목 추출]
-            # 링크 내부에 span(날짜, 작성자 등)이 섞여있으면 제거
-            # (soup 객체 복사 비용을 아끼기 위해 텍스트 정제 방식 사용)
             
-            # 1. 텍스트 추출 전 span 태그들 임시 제거 (DOM 조작 주의)
-            # 여기서는 안전하게 text만 가져온 뒤 정제
-            # 보통 도서관 구조: <a> Title <span class='mobile-date'>Date</span> </a>
+            import copy
+            a_clone = copy.copy(a_tag)
+            for tag in a_clone.select("span, i, em"):
+                tag.decompose()
             
-            # span 태그를 제외한 직계 텍스트만 가져오는 것은 복잡하므로
-            # 간단히 decompose() 사용 (현재 soup는 이 함수 끝나면 버려지므로 괜찮음)
-            for span in a.select("span"):
-                span.decompose()
-            
-            title = a.get_text(" ", strip=True)
+            title = a_clone.get_text(" ", strip=True)
 
-            # 제목 유효성 체크
             if not title or len(title) < 2: 
                 continue
 
-            full_detail_url = urljoin(full_url, link_href)
+            full_detail_url = urljoin(str(domain), link_href)
             candidates[full_detail_url] = title
             
         except Exception:
             continue
 
     return candidates
+# --------------------------------------------------------------------------
+# [Logic C] 대플 (취창업) 목록 파싱 (Javascript fnDetail 해석)
+# --------------------------------------------------------------------------
+# [Logic C] 대플 (취창업) 목록 파싱 (Javascript fnDetail 해석 - 최종 수정판)
+from urllib.parse import urlparse, parse_qsl, urlencode # 상단 import에 추가 필요
 
-# ... (아래 _process_candidates 등은 기존 코드와 동일)
+async def _crawl_daeple_list(category: str, config: dict):
+    list_url, info_base_url, _ = get_urls(category)
+    if not list_url: return {}
+
+    logger.info(f"🔄 [{category}] 대플 목록 가져오는 중... ({list_url})")
+    try:
+        html_text = await fetch_html(list_url)
+        soup = BeautifulSoup(html_text, "html.parser")
+    except Exception as e:
+        logger.error(f"❌ [{category}] 대플 접속 실패: {e}")
+        return {}
+
+    candidates = {}
+    
+    # [1] 목록 URL에서 필수 파라미터(메뉴코드 등) 추출
+    # 예: CURRENT_MENU_CODE=MENU0067&TOP_MENU_CODE=MENU0067&BD_NO=1
+    parsed_list_url = urlparse(list_url)
+    base_query_params = dict(parse_qsl(parsed_list_url.query))
+    
+    # [2] 행(Row) 찾기
+    rows = soup.select(".bbsBoard tbody tr")
+    if not rows: rows = soup.select("table tbody tr")
+    if not rows: rows = soup.select("table tr")
+        
+    logger.info(f"🔍 [{category}] 감지된 행 개수: {len(rows)}")
+
+    for i, row in enumerate(rows):
+        try:
+            # 제목 셀 찾기 (th 또는 td)
+            title_cell = (
+                row.select_one("th.ellipsis") or 
+                row.select_one("td.ellipsis") or 
+                row.select_one("td.subject")
+            )
+            
+            if not title_cell:
+                # 못 찾았으면 a 태그가 있는 첫 번째 셀 시도
+                for cell in row.find_all(['td', 'th']):
+                    if cell.find('a'):
+                        title_cell = cell
+                        break
+            
+            if not title_cell: continue
+            
+            a_tag = title_cell.find("a")
+            if not a_tag: continue
+
+            # 데이터 추출
+            title = a_tag.get_text(" ", strip=True)
+            href = a_tag.get("href") or a_tag.get("onclick") or ""
+            
+            if len(title) < 2: continue
+
+            # [3] 자바스크립트 인자 파싱
+            # fnDetail('3862', '', '109414', '1') -> [3862, '', 109414, 1]
+            args = re.findall(r"['\"]([^'\"]*)['\"]", str(href))
+            
+            if len(args) >= 3:
+                ntt_sn = args[0]  # 3862
+                bbs_id = args[2]  # 109414
+                
+                # [4] URL 조립 (필수 파라미터 병합)
+                # 기존 q_bbsId -> bbsId 로 변경 (404 해결 시도)
+                detail_params = {
+                    "bbsId": bbs_id,
+                    "nttSn": ntt_sn,
+                    **base_query_params # 리스트의 메뉴 코드 등을 그대로 상속
+                }
+                
+                # 쿼리스트링 생성
+                query_string = urlencode(detail_params)
+                full_detail_url = f"{info_base_url}?{query_string}"
+                
+                candidates[full_detail_url] = title
+            else:
+                if i < 3: 
+                    logger.warning(f"⚠️ [daeple] 링크 파싱 실패 (Row {i}): {href}")
+
+        except Exception as e:
+            logger.error(f"❌ [daeple] Row {i} 처리 중 에러: {e}")
+            continue
+
+    if candidates:
+        logger.info(f"✅ [{category}] 유효 공지 {len(candidates)}개 식별됨")
+    else:
+        logger.warning(f"⚠️ [{category}] 행은 찾았으나 유효한 공지 링크를 추출하지 못했습니다.")
+        
+    return candidates
+
 async def _process_candidates(db: AsyncSession, category: str, candidates_map: dict):
     candidate_urls = list(candidates_map.keys())
+    if not candidate_urls: return
 
-    # DB 중복 체크
     try:
         stmt = select(Notice.link).where(
             and_(
@@ -163,7 +273,6 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
         logger.error(f"🔥 [{category}] DB 조회 실패: {e}")
         return
 
-    # 저장 대상 선별
     tasks = []      
     meta_info = []  
     processed_in_this_run = set()
@@ -188,18 +297,21 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
         if isinstance(result, Exception) or not result:
             logger.warning(f"⚠️ 상세 파싱 실패: {meta_info[i]['detail_url']}")
             continue
-            
-        scraped_data = result
+        
+        # [Fix] Pylance Error: "Unknown | BaseException" is not "Dict[str, Any]"
+        # Pylance에게 이 변수가 확실히 Dict임을 강제로 알립니다(cast).
+        scraped_data = cast(Dict[str, Any], result)
+        
         meta = meta_info[i]
-        final_title = scraped_data["title"] if scraped_data["title"] else meta["list_title"]
+        final_title = scraped_data.get("title") if scraped_data.get("title") else meta["list_title"]
         
         new_notice = Notice(
             title=final_title,
             link=meta["detail_url"],
             date=scraped_data.get("date"),
-            content="\n\n".join(scraped_data["texts"]),
-            images=scraped_data["images"],
-            files=scraped_data["files"],
+            content="\n\n".join(scraped_data.get("texts", [])),
+            images=scraped_data.get("images", []),
+            files=scraped_data.get("files", []),
             category=meta["category"],
             univ_views=scraped_data.get("univ_views", 0),
             app_views=0
@@ -207,7 +319,6 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
         db.add(new_notice)
         new_notices_buffer.append(new_notice)
 
-    # 트랜잭션 커밋
     if new_notices_buffer:
         try:
             await db.commit()
@@ -227,13 +338,11 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
                 logger.error(f"🔥 DB 커밋 실패: {e}")
 
 async def safe_scrape_with_semaphore(url: str):
-    """세마포어를 이용한 안전한 스크래핑"""
     async with SCRAPE_SEMAPHORE:
         await asyncio.sleep(0.5) 
         return await scrape_notice_content(url)
 
 async def get_or_create_summary(db: AsyncSession, notice_id: int) -> str:
-    """공지사항 요약을 가져오거나, 없으면 생성(필요시 재크롤링)하여 저장"""
     stmt = select(Notice).where(Notice.id == notice_id)
     result = await db.execute(stmt)
     notice = result.scalars().first()
@@ -251,21 +360,30 @@ async def get_or_create_summary(db: AsyncSession, notice_id: int) -> str:
         try: image_list = json.loads(str(notice.images))
         except: pass
 
-    if len(content_to_use) < 2:
+    if len(content_to_use) < 5:
         logger.info(f"🔍 [Auto-Rescrape] ID:{notice_id} 본문 보강 시도")
         scraped_data = await scrape_notice_content(notice.link)
         if scraped_data:
-            content_to_use = "\n\n".join(scraped_data["texts"])
-            image_list = scraped_data["images"]
+            content_to_use = "\n\n".join(scraped_data.get("texts", []))
+            image_list = scraped_data.get("images", [])
             notice.content = content_to_use
-            notice.images = json.dumps(image_list, ensure_ascii=False)
-
+            try:
+                notice.images = image_list 
+            except: pass
+            
     summary = await generate_summary(content_to_use, image_list)
     notice.summary = summary
     await db.commit()
     return summary
 
-async def search_notices(db: AsyncSession, category: str, query: str = None, skip: int = 0, limit: int = 20, sort_by: str = "date"):
+async def search_notices(
+    db: AsyncSession, 
+    category: str, 
+    query: Optional[str] = None, 
+    skip: int = 0, 
+    limit: int = 20, 
+    sort_by: str = "date"
+):
     """공지사항 검색 및 조회 (API용)"""
     stmt = select(Notice)
     if category != "all":

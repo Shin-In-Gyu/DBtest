@@ -1,29 +1,46 @@
-import {
-  getKnuNotices,
-  type NoticeListItem,
-  type NoticeListResponse,
-} from "@/api/knuNotice";
+import { getKnuNotices } from "@/api/knuNotice";
+import { NoticeListItem, NoticeListResponse } from "@/types";
 import { useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-function dedupe(items: NoticeListItem[]) {
+function dedupe(items: NoticeListItem[], sourceKey: string) {
   const seen = new Set<string>();
   return items.filter((it) => {
-    const key = it.detailUrl || it.title;
+    const key =
+      (it.detailUrl && `${sourceKey}::${it.detailUrl}`) ||
+      `${sourceKey}::title::${it.title}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 }
 
+// ✅ detailUrl 없을 때도 중복비교가 되게 키 생성 함수
+function itemKey(it: NoticeListItem) {
+  return it.detailUrl ?? `title::${it.title ?? ""}`;
+}
+
 export function useKnuNotices(options?: {
-  pageSize?: number;
-  searchMenuSeq?: number;
+  pageSize?: number; // ✅ 프론트에서 "마지막 페이지 판정"에만 사용
+  sourceKey?: string;
+  q?: string;
+  sortBy?: "date" | "views";
+  token?: string;
+
+  enabled?: boolean; // ✅ 추가
 }) {
   const pageSize = options?.pageSize ?? 20;
-  const searchMenuSeq = options?.searchMenuSeq ?? 0;
+  const sourceKey = options?.sourceKey ?? "univ";
+  const q = options?.q ?? undefined;
+  const sortBy = options?.sortBy ?? "date";
+  const token = options?.token ?? undefined;
 
-  const queryKey = ["knuNotices", { searchMenuSeq, pageSize }] as const;
+  const enabled = options?.enabled ?? true; // ✅ 기본 true
+
+  const queryKey = [
+    "knuNotices",
+    { sourceKey, q, sortBy, token, pageSize },
+  ] as const;
 
   const query = useInfiniteQuery<
     NoticeListResponse,
@@ -34,28 +51,35 @@ export function useKnuNotices(options?: {
   >({
     queryKey,
     initialPageParam: 1,
+
+    enabled, // ✅ 핵심: false면 queryFn 자체 실행 안 됨
+
     queryFn: ({ pageParam }) =>
       getKnuNotices({
         page: pageParam,
-        limit: pageSize,
-        searchMenuSeq,
+        category: sourceKey,
+        q,
+        sort_by: sortBy,
+        token,
       }),
 
-    // ✅ 1 -> 2 -> 3 ... 로 확실히 넘어가게
-    // ✅ 단, 새 글이 하나도 없으면 종료(무한루프 방지)
     getNextPageParam: (lastPage, allPages, lastPageParam) => {
+      const lastItems = lastPage.items ?? [];
+
+      // ✅ "마지막 페이지"는 보통 20개보다 적게 옴
+      if (lastItems.length < pageSize) return undefined;
+
+      // ✅ 중복 페이지 방지 (detailUrl 없는 경우도 안전)
       const prevSet = new Set(
         allPages
           .slice(0, -1)
           .flatMap((p) => p.items ?? [])
-          .map((it) => it.detailUrl),
+          .map(itemKey),
       );
 
-      const newCount = (lastPage.items ?? []).filter(
-        (it) => !prevSet.has(it.detailUrl),
+      const newCount = lastItems.filter(
+        (it) => !prevSet.has(itemKey(it)),
       ).length;
-
-      // 마지막 페이지거나(0개) / 다음 페이지가 사실상 같은 페이지면 종료
       if (newCount === 0) return undefined;
 
       return lastPageParam + 1;
@@ -63,11 +87,14 @@ export function useKnuNotices(options?: {
   });
 
   const flatItems = useMemo(() => {
-    const items = query.data?.pages.flatMap((p) => p.items ?? []) ?? [];
-    return dedupe(items);
-  }, [query.data]);
+    // ✅ enabled=false면 화면에 아무것도 안 뜨게
+    if (!enabled) return [];
 
-  const totalCount = flatItems.length; // ✅ count 신뢰 못 하니까 그냥 현재 누적 개수로
+    const items = query.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+    return dedupe(items, sourceKey);
+  }, [enabled, query.data, sourceKey]);
+
+  const totalCount = flatItems.length;
 
   return { ...query, flatItems, totalCount };
 }

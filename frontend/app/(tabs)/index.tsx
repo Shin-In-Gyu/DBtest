@@ -1,178 +1,290 @@
-// frontend/app/(tabs)/index.tsx
-import React, { useEffect, useState } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  FlatList, 
-  TouchableOpacity, 
-  Text, 
-  ScrollView, 
+import ErrorBanner from "@/components/ErrorBanner";
+import NoticeCard from "@/components/NoticeCard";
+import { colors } from "@/constants";
+import { useKnuNotices } from "@/hooks/useKNUNoitces";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import {
   ActivityIndicator,
-  RefreshControl 
-} from 'react-native';
-import { useRouter } from 'expo-router';
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useBookmarks } from "../providers/BookmarksProvider";
+import { useReadStatus } from "../providers/ReadStatusProvider";
 
-import HomeHeader from '@/components/HomeHeader';
-import NoticeCard from '@/components/NoticeCard';
-import { getKnuNotices, NoticeListItem } from '@/api/knuNotice';
-import { categories } from '@/constants';
+import { categories } from "@/constants/knuSources";
+
+type TabItem = { id: string; label: string };
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const [notices, setNotices] = useState<NoticeListItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false); // 당겨서 새로고침용
-  const [selectedCategory, setSelectedCategory] = useState("all");
 
-  useEffect(() => {
-    fetchNotices();
-  }, [selectedCategory]);
+  const tabs: TabItem[] = useMemo(() => {
+    const deptTab = { id: "dept", label: "학과" };
 
-  const fetchNotices = async () => {
-    try {
-      setLoading(true);
-      // 실제 API 호출 (페이지네이션은 추후 추가 가능)
-      const res = await getKnuNotices({ page: 1, limit: 20, category: selectedCategory });
-      setNotices(Array.isArray(res) ? res : []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    const idx = categories.findIndex((t) => t.id === "all");
+    if (idx === -1) return [deptTab, ...categories]; // all 없으면 그냥 맨 앞
+
+    return [
+      ...categories.slice(0, idx + 1), // all 포함
+      deptTab,
+      ...categories.slice(idx + 1),
+    ];
+  }, []);
+
+  const [tabKey, setTabKey] = useState<TabItem["id"]>(tabs[0]?.id ?? "all");
+
+  const [deptKey, setDeptKey] = useState<string | null>(null);
+
+  // 학과 선택 페이지에서 돌아왔을 때 업데이트
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const stored = await AsyncStorage.getItem("@knu_selected_dept_v1");
+          if (stored) {
+            setDeptKey(stored);
+          }
+        } catch {
+          // 무시
+        }
+      })();
+    }, []),
+  );
+
+  const { isBookmarked, toggleBookmark } = useBookmarks();
+  const { isRead } = useReadStatus();
+
+  const noticesEnabled = tabKey !== "dept" || !!deptKey;
+  const effectiveSourceKey =
+    tabKey === "dept" ? (deptKey ?? "__unset__") : tabKey;
+  const listKey = tabKey === "dept" ? `dept:${deptKey ?? "unset"}` : tabKey;
+
+  const {
+    flatItems,
+    isFetching,
+    isRefetching,
+    isFetchingNextPage,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    refetch,
+  } = useKnuNotices({
+    pageSize: 20,
+    sourceKey: effectiveSourceKey,
+    enabled: noticesEnabled, // ✅ 핵심
+  });
+
+  const footer = useMemo(() => {
+    if (!noticesEnabled) return null; // ✅ 선택 전엔 footer 자체 없음
+    if (isFetchingNextPage) {
+      return (
+        <View style={s.footer}>
+          <ActivityIndicator color={colors.KNU} />
+          <Text style={s.footerText}>불러오는 중...</Text>
+        </View>
+      );
     }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotices();
-  };
+    if (!hasNextPage) {
+      return (
+        <View style={s.footer}>
+          <Text style={s.footerText}>마지막입니다</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={s.footer}>
+        <Pressable
+          onPress={() => fetchNextPage()}
+          style={({ pressed }) => [s.loadMoreBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Text style={s.loadMoreText}>더 불러오기</Text>
+        </Pressable>
+      </View>
+    );
+  }, [noticesEnabled, isFetchingNextPage, hasNextPage, fetchNextPage]);
 
   return (
-    <View style={styles.container}>
-      {/* 1. 커스텀 헤더 */}
-      <HomeHeader />
-
-      {/* 2. 카테고리 탭 (가로 스크롤) */}
-      <View style={styles.tabContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          contentContainerStyle={styles.tabScroll}
-        >
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[styles.tabItem, isSelected && styles.tabItemActive]}
-                onPress={() => setSelectedCategory(cat.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.tabText, isSelected && styles.tabTextActive]}>
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-      
-      {/* 3. 공지사항 리스트 */}
-      <View style={styles.listContainer}>
+    <View style={s.container}>
+      {/* ✅ 상단 가로 탭바 */}
+      <View style={s.tabWrap}>
         <FlatList
-          data={notices}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => (
-            <NoticeCard 
-              item={item} 
-              onPress={() => router.push(`/notice-detail?url=${encodeURIComponent(item.link)}`)} 
-            />
-          )}
-          // 성능 최적화 옵션
-          initialNumToRender={5}
-          windowSize={5}
-          // 여백 관리
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#006DB8']} />
-          }
-          ListEmptyComponent={
-            !loading && !refreshing ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="documents-outline" size={48} color="#DDD" />
-                <Text style={styles.emptyText}>등록된 공지사항이 없습니다.</Text>
-              </View>
-            ) : null
-          }
-          ListFooterComponent={loading && !refreshing ? <ActivityIndicator size="small" color="#999" /> : null}
+          horizontal
+          data={tabs}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.tabList}
+          renderItem={({ item }) => {
+            const active = item.id === tabKey;
+            return (
+              <Pressable
+                onPress={() => {
+                  setTabKey(item.id);
+                }}
+                style={({ pressed }) => [
+                  s.tabBtn,
+                  active && s.tabBtnActive,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={[s.tabText, active && s.tabTextActive]}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          }}
         />
       </View>
+
+      {/* ✅ 학과 탭 & 선택 전 화면: fetch 안함/리스트 안뜸 */}
+      {tabKey === "dept" && !deptKey ? (
+        <View style={s.deptEmptyWrap}>
+          <Text style={s.deptEmptyTitle}>학과를 설정하세요.</Text>
+          <Text style={s.deptEmptyDesc}>
+            학과를 선택하면 해당 학과 공지사항을 보여드릴게요.
+          </Text>
+
+          <Pressable
+            onPress={() => router.push(`/dept-select?selectedId=${deptKey || ""}`)}
+            style={({ pressed }) => [s.deptBtn, pressed && { opacity: 0.8 }]}
+          >
+            <Text style={s.deptBtnText}>학과설정하기</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          {/* ✅ 에러도 선택 후에만 보여주기 */}
+          {!!error && noticesEnabled && (
+            <ErrorBanner
+              message={
+                error instanceof Error ? error.message : "오류가 발생했습니다."
+              }
+              onRetry={() => refetch()}
+            />
+          )}
+
+          <FlatList
+            key={listKey}
+            data={flatItems}
+            keyExtractor={(item, index) =>
+              `${listKey}::${item.detailUrl ?? item.title ?? "no"}::${index}`
+            }
+            renderItem={({ item }) => (
+              <NoticeCard
+                item={item}
+                bookmarked={isBookmarked(item.detailUrl)}
+                isRead={isRead(item.detailUrl)}
+                onPress={() => {
+                  router.push({
+                    pathname: "/notice-detail",
+                    params: {
+                      url: item.detailUrl,
+                      noticeId: item.id?.toString() || "",
+                      title: item.title || "",
+                    },
+                  });
+                }}
+                onToggleBookmark={() =>
+                  toggleBookmark(
+                    {
+                      ...item,
+                      detailUrl: item.detailUrl,
+                    },
+                    tabKey === "dept" ? (deptKey ?? "dept") : tabKey,
+                  )
+                }
+              />
+            )}
+            contentContainerStyle={
+              flatItems.length === 0 ? s.emptyContainer : s.listContent
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={() => refetch()}
+                tintColor={colors.KNU}
+              />
+            }
+            onEndReachedThreshold={0.8}
+            onEndReached={() => {
+              if (!hasNextPage) return;
+              if (isFetchingNextPage) return;
+              fetchNextPage();
+            }}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={7}
+            removeClippedSubviews
+            ListEmptyComponent={
+              <Text style={s.helperText}>
+                {isFetching ? "불러오는 중..." : "표시할 공지사항이 없습니다."}
+              </Text>
+            }
+            ListFooterComponent={footer}
+          />
+        </>
+      )}
     </View>
   );
 }
 
-// 아이콘 사용을 위해 import (ListEmptyComponent용)
-import { Ionicons } from '@expo/vector-icons';
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f7f8fa" },
 
-const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F9F9F9' // 배경색을 아주 연한 회색으로 변경 (카드와 구분감)
-  },
-  
-  // 탭 스타일
-  tabContainer: {
-    backgroundColor: '#fff',
+  tabWrap: {
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    paddingBottom: 4,
+    borderBottomColor: "#eef0f3",
   },
-  tabScroll: {
+  tabList: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  tabBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#f1f5f9",
+  },
+  tabBtnActive: { backgroundColor: colors.KNU },
+  tabText: { fontSize: 13, fontWeight: "700", color: "#334155" },
+  tabTextActive: { color: "#fff" },
+
+  // ✅ 학과 선택 전 화면
+  deptEmptyWrap: {
+    flex: 1,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  deptEmptyTitle: { fontSize: 18, fontWeight: "900", color: "#111827" },
+  deptEmptyDesc: { color: "#6b7280", fontSize: 13, textAlign: "center" },
+  deptBtn: {
+    marginTop: 6,
+    backgroundColor: colors.KNU,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderRadius: 12,
   },
-  tabItem: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 24, // 둥근 알약 모양
-    backgroundColor: '#F5F5F5',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  tabItemActive: {
-    backgroundColor: '#006DB8', // 선택 시 진한 파랑 배경
-    borderColor: '#006DB8',
-  },
-  tabText: {
-    fontSize: 15,
-    color: '#777',
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: '#fff', // 선택 시 흰색 글자
-    fontWeight: '700',
-  },
+  deptBtnText: { color: "#fff", fontWeight: "900" },
 
-  // 리스트 스타일
-  listContainer: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 100, // [중요] 하단 탭바에 가려지지 않도록 넉넉하게
-  },
-
-  // 빈 상태 스타일
+  helperText: { color: "#6b7280", fontSize: 14, marginTop: 4 },
+  listContent: { padding: 12, gap: 10 },
   emptyContainer: {
-    padding: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
   },
-  emptyText: {
-    color: '#AAA',
-    fontSize: 15,
-    marginTop: 12, 
-  }
+  footer: { paddingVertical: 16, alignItems: "center", gap: 10 },
+  footerText: { color: "#6b7280", fontSize: 13 },
+  loadMoreBtn: {
+    backgroundColor: colors.KNU,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  loadMoreText: { color: colors.WHITE, fontWeight: "800" },
 });

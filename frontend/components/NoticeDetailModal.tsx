@@ -1,16 +1,16 @@
-// src/components/NoticeDetailModal.tsx
-import type { NoticeDetail } from "@/api/knuNotice";
 import { colors } from "@/constants";
-import React from "react";
+import type { NoticeDetail } from "@/types";
+import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Linking,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 async function openUrl(url: string) {
@@ -19,17 +19,69 @@ async function openUrl(url: string) {
   await Linking.openURL(url);
 }
 
+// 이미지 로딩 상태를 처리하는 컴포넌트
+function ImageWithLoading({
+  imageUrl,
+  style,
+}: {
+  imageUrl: string;
+  style: any;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  return (
+    <View style={[style, s.imageContainer]}>
+      {loading && (
+        <View style={s.imageLoadingContainer}>
+          <ActivityIndicator size="small" color={colors.KNU} />
+        </View>
+      )}
+      {error ? (
+        <View style={s.imageErrorContainer}>
+          <Text style={s.imageErrorText}>이미지를 불러올 수 없습니다</Text>
+        </View>
+      ) : (
+        <Image
+          source={{ uri: imageUrl }}
+          style={style}
+          resizeMode="contain"
+          onLoadStart={() => {
+            setLoading(true);
+            setError(false);
+          }}
+          onLoadEnd={() => setLoading(false)}
+          onError={() => {
+            setLoading(false);
+            setError(true);
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
 export default function NoticeDetailModal({
   visible,
   loading,
   detail,
+  detailUrl,
   onClose,
+  onMarkAsRead,
 }: {
   visible: boolean;
   loading: boolean;
   detail?: NoticeDetail;
+  detailUrl?: string;
   onClose: () => void;
+  onMarkAsRead?: (url: string) => void;
 }) {
+  // 모달이 열리고 detailUrl이 있으면 읽음으로 표시
+  useEffect(() => {
+    if (visible && detailUrl && onMarkAsRead) {
+      onMarkAsRead(detailUrl);
+    }
+  }, [visible, detailUrl, onMarkAsRead]);
   return (
     <Modal
       visible={visible}
@@ -47,7 +99,56 @@ export default function NoticeDetailModal({
           ) : detail ? (
             <ScrollView contentContainerStyle={s.content}>
               <Text style={s.title}>{detail.title || "제목 없음"}</Text>
-              <Text style={s.body}>{detail.content || "내용 없음"}</Text>
+              {typeof detail.views === "number" && (
+                <Text style={s.views}>조회 {detail.views}</Text>
+              )}
+              
+              {/* 이미지만 있는 경우 */}
+              {detail.is_image_only && detail.images && detail.images.length > 0 ? (
+                <View style={s.imageOnlyContainer}>
+                  {detail.images.map((imageUrl, index) => (
+                    <ImageWithLoading
+                      key={`image-${index}`}
+                      imageUrl={imageUrl}
+                      style={s.fullWidthImage}
+                    />
+                  ))}
+                </View>
+              ) : detail.is_image_heavy && detail.images && detail.images.length > 0 ? (
+                /* 이미지가 주로 이루고 있는 경우 */
+                <View style={s.imageHeavyContainer}>
+                  <View style={s.imageGallery}>
+                    {detail.images.map((imageUrl, index) => (
+                      <ImageWithLoading
+                        key={`image-${index}`}
+                        imageUrl={imageUrl}
+                        style={s.galleryImage}
+                      />
+                    ))}
+                  </View>
+                  {detail.content && detail.content.trim() && (
+                    <View style={s.minimalTextContainer}>
+                      <Text style={s.minimalText}>{detail.content}</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                /* 일반적인 공지사항 (텍스트 중심) */
+                <>
+                  <Text style={s.body}>{detail.content || "내용 없음"}</Text>
+                  {detail.images && detail.images.length > 0 && (
+                    <View style={s.inlineImages}>
+                      {detail.images.map((imageUrl, index) => (
+                        <ImageWithLoading
+                          key={`image-${index}`}
+                          imageUrl={imageUrl}
+                          style={s.inlineImage}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
 
               {detail.files?.length ? (
                 <View style={s.files}>
@@ -102,6 +203,7 @@ const s = StyleSheet.create({
   helper: { color: "#6b7280", fontSize: 14, marginTop: 4 },
   content: { gap: 14, paddingBottom: 18 },
   title: { fontSize: 18, fontWeight: "800", color: "#111827" },
+  views: { fontSize: 13, color: "#6b7280", marginTop: -4 },
   body: { fontSize: 15, lineHeight: 22, color: "#1f2937" },
   files: { gap: 8 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
@@ -119,4 +221,78 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   closeText: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  // 이미지 관련 스타일
+  imageContainer: {
+    position: "relative",
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  imageLoadingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+    zIndex: 1,
+  },
+  imageErrorContainer: {
+    width: "100%",
+    height: 200,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+  },
+  imageErrorText: {
+    color: "#6b7280",
+    fontSize: 14,
+  },
+  // 이미지만 있는 경우
+  imageOnlyContainer: {
+    width: "100%",
+    gap: 8,
+  },
+  fullWidthImage: {
+    width: "100%",
+    height: 300,
+    borderRadius: 8,
+  },
+  // 이미지가 주로 이루고 있는 경우
+  imageHeavyContainer: {
+    width: "100%",
+  },
+  imageGallery: {
+    width: "100%",
+    gap: 12,
+    marginBottom: 16,
+  },
+  galleryImage: {
+    width: "100%",
+    height: 250,
+    borderRadius: 8,
+  },
+  minimalTextContainer: {
+    padding: 12,
+    backgroundColor: "#f9f9f9",
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  minimalText: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
+  },
+  // 일반적인 공지사항의 인라인 이미지
+  inlineImages: {
+    marginTop: 16,
+    gap: 12,
+  },
+  inlineImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 8,
+  },
 });

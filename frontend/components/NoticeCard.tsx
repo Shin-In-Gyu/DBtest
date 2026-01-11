@@ -1,102 +1,211 @@
-// frontend/components/NoticeCard.tsx
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { NoticeListItem } from '@/api/knuNotice';
+import { colors } from "@/constants";
+import { CATEGORY_LABEL } from "@/constants/knuSources";
+import type { NoticeListItem } from "@/types";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-interface Props {
+export default function NoticeCard({
+  item,
+  bookmarked,
+  isRead,
+  onPress,
+  onToggleBookmark,
+  highlightQuery,
+}: {
   item: NoticeListItem;
-  onPress: (link: string) => void;
-}
+  bookmarked: boolean;
+  isRead?: boolean;
+  onPress: () => void;
+  onToggleBookmark: () => void;
+  highlightQuery?: string;
+}) {
+  const categoryText = item.category
+    ? (CATEGORY_LABEL[item.category] ?? item.category)
+    : null;
 
-export default function NoticeCard({ item, onPress }: Props) {
-  return (
-    <TouchableOpacity 
-      style={styles.card} 
-      onPress={() => onPress(item.link)}
-      activeOpacity={0.7}
-    >
-      {/* 1. 상단: 제목 */}
-      <Text style={styles.title} numberOfLines={2}>
-        {item.title}
+  const hasMeta =
+    !!categoryText || !!item.date || typeof item.views === "number";
+
+  // 검색어 하이라이트 처리
+  const renderHighlightedTitle = () => {
+    const title = item.title || "";
+    if (!highlightQuery || !highlightQuery.trim()) {
+      return (
+        <Text style={[s.title, isRead && s.titleRead]} numberOfLines={2}>
+          {title}
+        </Text>
+      );
+    }
+
+    const query = highlightQuery.trim();
+    const titleLower = title.toLowerCase();
+    const queryLower = query.toLowerCase();
+    const parts: { text: string; highlight: boolean }[] = [];
+    let lastIndex = 0;
+    let index = titleLower.indexOf(queryLower, lastIndex);
+
+    while (index !== -1) {
+      // 매칭 전 텍스트
+      if (index > lastIndex) {
+        parts.push({
+          text: title.substring(lastIndex, index),
+          highlight: false,
+        });
+      }
+      // 매칭된 텍스트
+      parts.push({
+        text: title.substring(index, index + query.length),
+        highlight: true,
+      });
+      lastIndex = index + query.length;
+      index = titleLower.indexOf(queryLower, lastIndex);
+    }
+
+    // 남은 텍스트
+    if (lastIndex < title.length) {
+      parts.push({
+        text: title.substring(lastIndex),
+        highlight: false,
+      });
+    }
+
+    return (
+      <Text style={[s.title, isRead && s.titleRead]} numberOfLines={2}>
+        {parts.map((part, idx) => (
+          <Text
+            key={idx}
+            style={part.highlight ? [s.titleHighlight, isRead && s.titleHighlightRead] : undefined}
+          >
+            {part.text}
+          </Text>
+        ))}
       </Text>
-      
-      {/* 2. 하단: 메타 정보 (카테고리 | 날짜 | 조회수) 한 줄 배치 */}
-      <View style={styles.metaRow}>
-        <View style={styles.badgeContainer}>
-          <Text style={styles.categoryBadge}>{item.category}</Text>
-        </View>
+    );
+  };
 
-        <Text style={styles.divider}>|</Text>
-        
-        <Text style={styles.date}>{item.date}</Text>
-        
-        <Text style={styles.divider}>|</Text>
-        
-        {/* [수정] 조회수를 날짜 옆에 배치 (univ_views 사용) */}
-        <Text style={styles.views}>조회 {item.univ_views ?? 0}</Text>
-        
-        {/* 작성자는 공간 부족 시 생략하거나 제일 뒤에 배치 */}
-        {/* <Text style={styles.author}>{item.author}</Text> */}
-      </View>
-    </TouchableOpacity>
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.card,
+        isRead && s.cardRead,
+        pressed && s.pressed,
+      ]}
+    >
+      {renderHighlightedTitle()}
+
+      {hasMeta && (
+        <View style={s.metaRow}>
+          {/* ✅ 왼쪽 메타 */}
+          <View style={s.metaLeft}>
+            {!!categoryText && (
+              <View style={s.badgeContainer}>
+                <Text style={s.categoryBadge} numberOfLines={1}>
+                  {categoryText}
+                </Text>
+              </View>
+            )}
+
+            {!!categoryText &&
+              (item.date || typeof item.views === "number") && (
+                <Text style={s.divider}>|</Text>
+              )}
+
+            {!!item.date && <Text style={s.date}>{item.date}</Text>}
+
+            {!!item.date && typeof item.views === "number" && (
+              <Text style={s.divider}>|</Text>
+            )}
+
+            {typeof item.views === "number" && (
+              <Text style={s.views}>
+                조회 {item.views.toLocaleString("ko-KR")}
+              </Text>
+            )}
+          </View>
+
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onToggleBookmark();
+            }}
+            hitSlop={10}
+            style={({ pressed }) => [
+              s.bookmarkBtn,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Ionicons
+              name={bookmarked ? "bookmark" : "bookmark-outline"}
+              size={20}
+              color={bookmarked ? colors.KNU : "#64748b"}
+            />
+          </Pressable>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12, // 라운드 약간 줄임 (세련된 느낌)
-    paddingVertical: 14, // 상하 여백 축소 (기존 20 -> 14)
-    paddingHorizontal: 16,
-    marginBottom: 10, // 카드 간 간격 축소 (기존 16 -> 10)
-    
-    // 얇은 테두리와 약한 그림자로 깔끔하게
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    backgroundColor: colors.WHITE,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#e5e7eb",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
-  title: {
-    fontSize: 15, // 폰트 사이즈 조절
-    fontWeight: '600', // 너무 두껍지 않게
-    color: '#222',
-    lineHeight: 22,
-    marginBottom: 8, // 제목과 하단 정보 사이 간격 줄임
+  cardRead: {
+    backgroundColor: "#f9fafb",
+    opacity: 0.8,
   },
+  pressed: { opacity: 0.85 },
+  title: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  titleRead: { color: "#6b7280", fontWeight: "600" },
+  titleHighlight: {
+    backgroundColor: "#FEF3C7",
+    color: "#92400E",
+    fontWeight: "800",
+  },
+  titleHighlightRead: {
+    backgroundColor: "#FEF3C7",
+    color: "#92400E",
+  },
+
   metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between", // ✅ 좌/우 분리
+    gap: 10,
   },
+  metaLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0, // ✅ 텍스트 줄어들 수 있게
+  },
+
   badgeContainer: {
-    backgroundColor: '#F5F7FA',
+    backgroundColor: "#F5F7FA",
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    maxWidth: 140,
   },
-  categoryBadge: {
-    fontSize: 11,
-    color: '#555',
-    fontWeight: '600',
+  categoryBadge: { fontSize: 11, color: "#555", fontWeight: "700" },
+  divider: { marginHorizontal: 6, color: "#E0E0E0", fontSize: 10 },
+  date: { fontSize: 12, color: "#888" },
+  views: { fontSize: 12, color: "#888" },
+
+  bookmarkBtn: {
+    paddingLeft: 6,
+    paddingVertical: 2,
   },
-  divider: {
-    marginHorizontal: 6,
-    color: '#E0E0E0',
-    fontSize: 10,
-  },
-  date: {
-    fontSize: 12,
-    color: '#888',
-  },
-  views: {
-    fontSize: 12,
-    color: '#888',
-  },
-  author: {
-    marginLeft: 'auto', // 우측 끝으로 밀기
-    fontSize: 12,
-    color: '#999',
-  }
 });

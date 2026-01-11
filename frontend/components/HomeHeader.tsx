@@ -1,42 +1,42 @@
-// frontend/components/HomeHeader.tsx
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function HomeHeader() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.content}>
-        {/* 로고 영역 */}
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>Knoti</Text>
-          <View style={styles.dot} />
-        </View>
-        
-        {/* 아이콘 버튼 그룹 */}
-        <View style={styles.iconGroup}>
-          <TouchableOpacity 
-            style={styles.iconButton} 
-            onPress={() => router.push('/search')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="search-outline" size={24} color="#333" />
-          </TouchableOpacity>
+    <View style={[styles.wrap, { paddingTop: insets.top }]}>
+      <View style={styles.inner}>
+        {/* 왼쪽: 앱 이름 */}
+        <Text style={styles.title} numberOfLines={1}>
+          KNU 공지
+        </Text>
 
-          <TouchableOpacity 
-            style={styles.iconButton} 
-            onPress={() => router.push('/notifications')}
-            activeOpacity={0.7}
+        {/* 오른쪽: 검색 + 알림 */}
+        <View style={styles.right}>
+          <Pressable
+            onPress={() => router.push("/search")}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && { opacity: 0.6 },
+            ]}
           >
-            <Ionicons name="notifications-outline" size={24} color="#333" />
-            {/* 알림 배지 예시 (나중에 로직 연결 가능) */}
+            <Ionicons name="search-outline" size={24} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/notifications")}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Ionicons name="notifications-outline" size={24} />
             {/* <View style={styles.badge} /> */}
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -44,59 +44,40 @@ export default function HomeHeader() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#fff',
-    // iOS 그림자
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    // Android 그림자
-    elevation: 3,
-    zIndex: 10,
+  wrap: {
+    backgroundColor: "#fff",
   },
-  content: {
-    height: 56, // 안드로이드 표준 헤더 높이
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20, // 좌우 여백 넉넉하게
+  inner: {
+    height: 56,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+  title: {
+    fontSize: 18,
+    fontWeight: "800",
+    maxWidth: 160,
   },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '800', // 굵게 강조
-    color: '#006DB8', // 경북대 메인 컬러 (혹은 앱 테마 컬러)
-    letterSpacing: -0.5,
+  right: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF4B4B', // 포인트 컬러
-    marginLeft: 2,
-    marginBottom: 4,
-  },
-  iconGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconButton: {
-    padding: 8, // 터치 영역 확보
-    marginLeft: 8,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
+    position: "absolute",
+    top: 10,
+    right: 10,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FF4B4B',
-    borderWidth: 1,
-    borderColor: '#fff',
-  }
+    backgroundColor: "#ff3b30",
+  },
 });

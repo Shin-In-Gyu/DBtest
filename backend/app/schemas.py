@@ -1,5 +1,5 @@
 # app/schemas.py
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, computed_field
 from typing import List, Optional, Any
 from datetime import date as dateType, datetime
 
@@ -12,6 +12,12 @@ class NoticeBase(BaseModel):
     author: Optional[str] = None
     univ_views: int = 0
     app_views: int = 0
+    
+    @computed_field
+    @property
+    def views(self) -> int:
+        """총 조회수 (univ_views + app_views)"""
+        return (self.univ_views or 0) + (self.app_views or 0)
 
 # [응답용] 목록 조회 시 나갈 데이터 (본문 제외, ID 포함)
 class NoticeListResponse(NoticeBase):

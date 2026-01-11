@@ -1,6 +1,5 @@
 # app/routers/knu.py
 import json
-import traceback
 from typing import List, Optional, Set
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -17,15 +16,11 @@ from app.schemas import (
 )
 from app.services import knu_notice_service
 from app.services.scraper import scrape_notice_content
-from app.services.ai_service import generate_summary
 from app.core.logger import get_logger
 
 router = APIRouter()
 logger = get_logger()
 
-# --------------------------------------------------------------------------
-# 1. 공지사항 목록 조회 (Async Refactored)
-# --------------------------------------------------------------------------
 @router.get("/notices", response_model=List[NoticeListResponse])
 async def read_notices(
     category: str = "all",
@@ -33,25 +28,22 @@ async def read_notices(
     page: int = 1,
     sort_by: str = "date",
     token: Optional[str] = Query(None, description="스크랩 확인용 토큰"),
-    db: AsyncSession = Depends(get_db)  # Session -> AsyncSession 변경
+    db: AsyncSession = Depends(get_db)
 ):
     limit = 20
     skip = (page - 1) * limit
     
-    # [Fix] 서비스 함수 호출 시 await 추가 (knu_notice_service가 async 함수임)
+    # [Fix] q (Optional[str]) 전달 시 Pylance 호환성 확보 (Service 함수 시그니처 수정됨)
     results = await knu_notice_service.search_notices(
         db, category, query=q, skip=skip, limit=limit, sort_by=sort_by
     )
 
-    # 스크랩 여부 마킹 (Async 쿼리로 변경)
     if token:
-        # 기기 조회
         stmt_device = select(Device).filter(Device.token == token)
         res_device = await db.execute(stmt_device)
         device = res_device.scalars().first()
         
         if device:
-            # 내 스크랩 목록 조회
             stmt_scrap = select(Scrap.notice_id).filter(Scrap.device_id == device.id)
             res_scrap = await db.execute(stmt_scrap)
             my_scrap_ids = set(res_scrap.scalars().all())
@@ -62,9 +54,6 @@ async def read_notices(
 
     return results
 
-# --------------------------------------------------------------------------
-# 2. 공지사항 상세 조회 (Async Refactored)
-# --------------------------------------------------------------------------
 @router.get("/notice/detail", response_model=NoticeDetailResponse)
 async def get_notice_detail(
     url: str, 
@@ -75,21 +64,12 @@ async def get_notice_detail(
     notice_in_db = None
     is_scraped = False
 
-    # A. DB 조회 및 조회수 증가
     if notice_id:
         stmt = select(Notice).filter(Notice.id == notice_id)
         result = await db.execute(stmt)
         notice_in_db = result.scalars().first()
 
         if notice_in_db:
-            try:
-                # 조회수 1 증가
-                notice_in_db.app_views += 1
-                await db.commit() # [Fix] await 추가
-            except Exception:
-                await db.rollback() # [Fix] await 추가
-
-            # 스크랩 여부 확인
             if token:
                 stmt_device = select(Device).filter(Device.token == token)
                 res_device = await db.execute(stmt_device)
@@ -103,14 +83,14 @@ async def get_notice_detail(
                     res_check = await db.execute(stmt_check)
                     is_scraped = bool(res_check.scalars().first())
 
-    # B. 실시간 내용 크롤링 (이미 Async 함수임)
     scraped_data = await scrape_notice_content(url)
     if not scraped_data:
         raise HTTPException(status_code=404, detail="원문 페이지를 불러올 수 없습니다.")
 
-    # C. DB 업데이트 (Async Commit)
+    # [Fix] Pylance: notice_in_db가 None이 아님을 보장한 후 접근
     if notice_in_db:
         new_full_content = "\n\n".join(scraped_data["texts"])
+        # models.py에 타입 힌트를 추가했으므로 에러 사라짐
         if notice_in_db.content != new_full_content:
             notice_in_db.content = new_full_content
             try:
@@ -118,6 +98,10 @@ async def get_notice_detail(
             except Exception:
                 await db.rollback()
 
+    univ_views = scraped_data.get("univ_views", 0)
+    app_views = notice_in_db.app_views if notice_in_db else 0
+    total_views = (univ_views or 0) + (app_views or 0)
+    
     return {
         "id": notice_id if notice_id else 0,
         "title": scraped_data["title"],
@@ -128,21 +112,42 @@ async def get_notice_detail(
         "content": "\n\n".join(scraped_data["texts"]),
         "images": scraped_data["images"],
         "files": scraped_data["files"],
-        "univ_views": scraped_data["univ_views"],
-        "app_views": notice_in_db.app_views if notice_in_db else 0,
+        "univ_views": univ_views,
+        "app_views": app_views,
+        "views": total_views,
         "crawled_at": notice_in_db.crawled_at if notice_in_db else None,
         "is_scraped": is_scraped,
         "summary": notice_in_db.summary if notice_in_db else None
     }
 
-# --------------------------------------------------------------------------
-# 3. AI 요약 생성 (Async Refactored) - 에러 발생하던 부분
-# --------------------------------------------------------------------------
+@router.post("/notice/{notice_id}/view")
+async def increment_view_count(notice_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(Notice).filter(Notice.id == notice_id)
+    result = await db.execute(stmt)
+    notice = result.scalars().first()
+    
+    if not notice:
+        raise HTTPException(status_code=404, detail="공지사항을 찾을 수 없습니다")
+    
+    try:
+        # [Fix] Optional[int]와 int 덧셈 처리 (models.py 힌트 덕분에 안전)
+        current_views = notice.app_views or 0
+        notice.app_views = current_views + 1
+        await db.commit()
+        await db.refresh(notice)
+        
+        return {
+            "success": True,
+            "app_views": notice.app_views
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"조회수 증가 에러: {e}")
+        raise HTTPException(status_code=500, detail="조회수 증가 실패")
 
 @router.post("/notice/{notice_id}/summary")
 async def create_notice_summary(notice_id: int, db: AsyncSession = Depends(get_db)):
     try:
-        # 서비스 계층으로 로직 위임
         summary = await knu_notice_service.get_or_create_summary(db, notice_id)
         return {"summary": summary}
     except ValueError:
@@ -150,45 +155,40 @@ async def create_notice_summary(notice_id: int, db: AsyncSession = Depends(get_d
     except Exception as e:
         logger.error(f"Summary Error: {e}")
         raise HTTPException(status_code=500, detail="서버 내부 오류")
-# --------------------------------------------------------------------------
-# 4. 기기 등록 및 스크랩 API (Async Refactored)
-# --------------------------------------------------------------------------
+        
 @router.post("/device/register")
 async def register_device(request: DeviceRegisterRequest, db: AsyncSession = Depends(get_db)):
     stmt = select(Device).filter(Device.token == request.token)
     result = await db.execute(stmt)
     existing = result.scalars().first()
     
-    if existing:
-        existing.keywords = request.keywords
-        logger.info(f"🔄 기기 갱신: {request.token[:8]}...")
-    else:
-        new_device = Device(token=request.token, keywords=request.keywords)
+    # [Note] 키워드 로직은 별도 테이블로 분리되었으므로, 여기서는 토큰 등록/갱신만 집중
+    if not existing:
+        new_device = Device(token=request.token)
         db.add(new_device)
         logger.info(f"✨ 기기 등록: {request.token[:8]}...")
+    else:
+        logger.info(f"🔄 기기 확인: {request.token[:8]}...")
     
     try:
         await db.commit()
-        return {"message": "success", "keywords": request.keywords}
+        return {"message": "success"}
     except:
         await db.rollback()
         raise HTTPException(status_code=500, detail="기기 등록 실패")
 
 @router.post("/scrap/{notice_id}")
 async def toggle_scrap(notice_id: int, request: ScrapRequest, db: AsyncSession = Depends(get_db)):
-    # 기기 확인
     res_device = await db.execute(select(Device).filter(Device.token == request.token))
     device = res_device.scalars().first()
     if not device:
         raise HTTPException(status_code=404, detail="기기 등록이 필요합니다.")
 
-    # 공지 확인
     res_notice = await db.execute(select(Notice).filter(Notice.id == notice_id))
     notice = res_notice.scalars().first()
     if not notice:
         raise HTTPException(status_code=404, detail="공지사항이 없습니다.")
 
-    # 스크랩 여부 확인
     stmt_scrap = select(Scrap).filter(
         Scrap.device_id == device.id, 
         Scrap.notice_id == notice_id
@@ -198,7 +198,6 @@ async def toggle_scrap(notice_id: int, request: ScrapRequest, db: AsyncSession =
 
     try:
         if existing_scrap:
-            # 삭제 시 delete(...) 대신 객체를 db.delete()로 넘기거나 stmt 실행
             await db.delete(existing_scrap)
             await db.commit()
             return {"status": "removed", "message": "스크랩 취소됨"}
@@ -220,7 +219,6 @@ async def get_my_scraps(token: str, db: AsyncSession = Depends(get_db)):
     if not device:
         return []
 
-    # Join 쿼리 (2.0 Style)
     stmt = (
         select(Notice)
         .join(Scrap, Notice.id == Scrap.notice_id)

@@ -1,84 +1,116 @@
-// frontend/api/knuNotice.ts
-import Constants from "expo-constants";
-import { Platform } from "react-native";
+// src/api/knuNotice.ts
+import { NoticeDetail, NoticeListItem, NoticeListResponse } from "@/types";
+import KNU_API_BASE from "./base-uri";
 
+type QueryValue = string | number | boolean | undefined | null;
 
-// [수정] 내 컴퓨터 IP 주소 (반드시 확인!)
-const LOCAL_IP = "192.168.45.218"; // 방금 성공한 IP 유지
-
-export type NoticeListItem = {
-  id: number;
-  title: string;
-  link: string;
-  date: string;
-  author: string;
-  category: string;
-  is_scraped?: boolean; // 백엔드에서 주는 필드 추가
-  univ_views: number;
-};
-
-// [수정] 백엔드는 배열을 바로 반환하므로 타입을 배열로 변경
-export type NoticeListResponse = NoticeListItem[];
-
-const API_HOST =
-  (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)
-    ?.apiBaseUrl ??
-  (Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
-    : `http://${LOCAL_IP}:8000`);
-
-const KNU_API_BASE = `${API_HOST}/api/knu`.replace(/([^:]\/)\/+/g, "$1");
-
-function buildUrl(path: string, params?: Record<string, string | number>) {
+function buildUrl(path: string, params?: Record<string, QueryValue>) {
   const url = new URL(`${KNU_API_BASE}${path}`);
   if (params) {
-    Object.entries(params).forEach(([k, v]) =>
-      url.searchParams.set(k, String(v)),
-    );
+    Object.entries(params).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      url.searchParams.set(k, String(v));
+    });
   }
   return url.toString();
 }
 
 async function safeFetch<T>(url: string): Promise<T> {
-  console.log(`[API Request] ${url}`);
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`요청 실패 (${res.status})`);
-    }
-    return (await res.json()) as T;
-  } catch (error) {
-    console.error(`[API Error] ${error}`);
-    throw error;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`요청 실패 (${res.status})\n${text.slice(0, 300)}`);
   }
+  return (await res.json()) as T;
 }
 
-// [수정] 파라미터를 category로 변경
+// ✅ 백엔드 raw 타입 (네가 올린 JSON 그대로)
+type RawNotice = {
+  id: number;
+  title: string;
+  link: string;
+  date?: string;
+  category?: string;
+  author?: string | null;
+  univ_views?: number;
+  app_views?: number;
+  views?: number; // 총 조회수 (univ_views + app_views)
+  is_scraped?: boolean;
+};
+
 export async function getKnuNotices(params: {
   page: number;
-  limit: number;
-  category: string; // searchMenuSeq 삭제 -> category 추가
+  category: string;
+  q?: string;
+  sort_by?: "date" | "views";
+  token?: string;
 }): Promise<NoticeListResponse> {
   const url = buildUrl("/notices", {
+    category: params.category,
     page: params.page,
-    category: params.category, // 백엔드 쿼리 파라미터 매핑
+    sort_by: params.sort_by,
+    q: params.q,
+    token: params.token,
   });
-  return safeFetch<NoticeListResponse>(url);
+
+  // ✅ 백엔드는 배열을 준다
+  const raw = await safeFetch<RawNotice[]>(url);
+
+  // ✅ 프론트에서 쓰는 형태로 변환
+  const items: NoticeListItem[] = raw.map((r) => ({
+    id: r.id,
+    title: r.title,
+    detailUrl: r.link, // ✅ 핵심: link -> detailUrl
+    date: r.date,
+    category: r.category,
+    author: r.author,
+    univ_views: r.univ_views, // 참고용
+    app_views: r.app_views, // 참고용
+    views: r.views, // 총 조회수 사용
+    is_scraped: r.is_scraped,
+  }));
+
+  return {
+    count: items.length,
+    items,
+  };
 }
 
-export async function getKnuNoticeDetail(
-  detailUrl: string,
-): Promise<NoticeDetail> {
-  // 백엔드: /api/knu/notice/detail
-  const url = buildUrl("/notice/detail", { url: detailUrl });
+export async function getKnuNoticeDetail(params: {
+  detailUrl: string;
+  noticeId?: number;
+  token?: string;
+}) {
+  const url = buildUrl("/notice/detail", {
+    url: params.detailUrl,
+    notice_id: params.noticeId,
+    token: params.token,
+  });
   return safeFetch<NoticeDetail>(url);
 }
 
-// NoticeDetail 타입 정의 (프론트엔드에서 사용하는 형태)
-export type NoticeDetail = {
-  title: string;
-  content?: string; // 단일 content 필드가 있는 경우
-  texts?: string[]; // 분리된 텍스트 배열
-  images?: string[]; // 본문 이미지 URL 배열
-  files?: { name: string; url: string }[]; // 첨부파일
-};
+// 조회수 증가 API (새로 추가)
+// 백엔드에서 /api/knu/notice/{notice_id}/view 엔드포인트가 필요합니다
+export async function incrementNoticeView(noticeId: number): Promise<void> {
+  if (!noticeId) {
+    console.warn("조회수 증가: noticeId가 없습니다");
+    return;
+  }
+
+  try {
+    // buildUrl은 query params를 사용하므로 직접 URL 생성
+    const url = `${KNU_API_BASE}/notice/${noticeId}/view`.replace(/([^:]\/)\/+/g, "$1");
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) {
+      console.warn(`조회수 증가 실패: ${res.status}`);
+    }
+  } catch (error) {
+    // 조회수 증가 실패는 무시 (사용자 경험에 영향 없음)
+    console.error("조회수 증가 실패:", error);
+  }
+}
