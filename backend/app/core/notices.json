@@ -1,150 +1,182 @@
 {
+  "lib": {
+    "name": "도서관",
+    "type": "library",
+    "domain": "https://lib.kangnam.ac.kr/",
+    "url_path": "/Board?n=notice"
+  },
   "univ": {
     "name": "전체",
+    "type": "main_cms",
     "domain": "https://web.kangnam.ac.kr",
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 0
   },
   "academic": {
     "name": "학사",
+    "type": "main_cms",
     "domain": "https://web.kangnam.ac.kr",
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 116
   },
   "scholar": {
     "name": "장학",
+    "type": "main_cms",
     "domain": "https://web.kangnam.ac.kr",
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 117
   },
   "learning": {
     "name": "학습/상담",
+    "type": "main_cms",
     "domain": "https://web.kangnam.ac.kr",
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 118
   },
   "job": {
     "name": "취창업",
+    "type": "main_cms",
     "domain": "https://web.kangnam.ac.kr",
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 344
   },
+  
   "dls": {
     "name": "자유전공학부",
+    "type": "main_cms",
     "domain": "https://dls.kangnam.ac.kr",
     "menu_id": "e789c348fbc8bb492728f600b8f41a44",
     "seq": 0
   },
   "social_work": {
     "name": "사회복지학부",
+    "type": "main_cms",
     "domain": "https://knusw.kangnam.ac.kr",
     "menu_id": "22dd7f703ec676ffdecdd6b4e4fe1b1b",
     "seq": 0
   },
   "senior_biz": {
     "name": "시니어비즈니스학과",
+    "type": "main_cms",
     "domain": "https://senior-industry.kangnam.ac.kr",
     "menu_id": "f61730fb09006de23bee07331bfda13e",
     "seq": 0
   },
   "global_biz": {
     "name": "상경학부",
+    "type": "main_cms",
     "domain": "https://globalbiz.kangnam.ac.kr",
     "menu_id": "6b108ed6447a9b934100e9a1ddc0c070",
     "seq": 0
   },
   "law_tax": {
     "name": "법행정세무학부",
+    "type": "main_cms",
     "domain": "https://pet.kangnam.ac.kr",
     "menu_id": "04cb25b9b9430b879fd82a9ef90206aa",
     "seq": 0
   },
   "culture_content": {
     "name": "문화콘텐츠학과",
+    "type": "main_cms",
     "domain": "https://kcc.kangnam.ac.kr",
     "menu_id": "29b8da331f6b973f09bfef239630d1b7",
     "seq": 5261
   },
   "intl_area": {
     "name": "국제지역학과",
+    "type": "main_cms",
     "domain": "https://kcc.kangnam.ac.kr",
     "menu_id": "29b8da331f6b973f09bfef239630d1b7",
     "seq": 12875
   },
   "china_biz": {
     "name": "중국콘텐츠비즈니스학과",
+    "type": "main_cms",
     "domain": "https://kcc.kangnam.ac.kr",
     "menu_id": "29b8da331f6b973f09bfef239630d1b7",
     "seq": 12882
   },
   "christian_comm": {
     "name": "기독교커뮤니케이션학과",
+    "type": "main_cms",
     "domain": "https://dcs.kangnam.ac.kr",
     "menu_id": "942f430954b529e6d910d5ba8c61a29f",
     "seq": 0
   },
   "computer": {
     "name": "컴퓨터공학부",
+    "type": "main_cms",
     "domain": "https://sae.kangnam.ac.kr",
     "menu_id": "e408e5e7c9f27b8c0d5eeb9e68528b48",
     "seq": 0
   },
   "ai": {
     "name": "인공지능융합공학부",
+    "type": "main_cms",
     "domain": "https://ace.kangnam.ac.kr",
     "menu_id": "f3a3bfbbc5715e4180657f71177d8bcf",
     "seq": 0
   },
   "esc": {
     "name": "전자반도체공학부",
+    "type": "main_cms",
     "domain": "https://esc.kangnam.ac.kr",
     "menu_id": "f25ac6a8a2a27a5a10fee744b5084a6e",
     "seq": 0
   },
   "real_estate": {
     "name": "부동산건설학부",
+    "type": "main_cms",
     "domain": "https://knureal.kangnam.ac.kr",
     "menu_id": "26c80ce9728657a14fe638d4c566ead8",
     "seq": 0
   },
   "edu": {
     "name": "교육학과",
+    "type": "main_cms",
     "domain": "https://educ.kangnam.ac.kr",
     "menu_id": "8e4d118b43e9fb0f1d3d8ff4a35911c4",
     "seq": 0
   },
   "ece": {
     "name": "유아교육과",
+    "type": "main_cms",
     "domain": "https://knece.kangnam.ac.kr",
     "menu_id": "1e179ef9d06b26f3ae133a18a5ee1ba7",
     "seq": 0
   },
   "sped_elem": {
     "name": "초등중등특수교육과",
+    "type": "main_cms",
     "domain": "https://sped.kangnam.ac.kr",
     "menu_id": "f1b0fb76ba66f0a7319fc278bed29175",
     "seq": 0
   },
   "clas": {
     "name": "KNU참인재대학",
+    "type": "main_cms",
     "domain": "https://clas.kangnam.ac.kr",
     "menu_id": "0a9724422ac736bd5d7eb039deab70db",
     "seq": 0
   },
   "wel_tech": {
     "name": "융복합전공",
+    "type": "main_cms",
     "domain": "https://wel-tech.kangnam.ac.kr",
     "menu_id": "7bf0844d28678ab4ffa96ceae9e0da25",
     "seq": 0
   },
   "pe": {
     "name": "체육학과",
+    "type": "main_cms",
     "domain": "https://ksps.kangnam.ac.kr",
     "menu_id": "3c5c4cf0bebe416ae09666bee7b38984",
     "seq": 0
   },
   "music": {
     "name": "음악학과",
+    "type": "main_cms",
     "domain": "https://musicdpt.kangnam.ac.kr",
     "menu_id": "ac37fa802cc891d4909f48061ae97ecc",
     "seq": 0

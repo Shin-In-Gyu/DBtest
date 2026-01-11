@@ -2,6 +2,7 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
+
 // [수정] 내 컴퓨터 IP 주소 (반드시 확인!)
 const LOCAL_IP = "192.168.45.218"; // 방금 성공한 IP 유지
 

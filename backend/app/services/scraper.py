@@ -5,16 +5,11 @@ from urllib.parse import urljoin
 import re
 from datetime import datetime
 from app.core.logger import get_logger
-from app.core.config import SSL_VERIFY
 
 logger = get_logger()
 
 async def scrape_notice_content(url: str):
-    """
-    공지사항 상세 페이지 스크래핑 (에러 방어 로직 강화)
-    """
     try:
-        # 타임아웃 15초, SSL 검증 무시(학교 서버 호환성)
         async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
             response = await client.get(url)
             response.raise_for_status()
@@ -29,88 +24,100 @@ async def scrape_notice_content(url: str):
             "images": [], "files": [], "univ_views": 0
         }
 
-        # 1. 제목 (다양한 선택자 대응)
-        # .tblw_subj: 일반 게시판, .subject: 구형 게시판, h4.title: 반응형 게시판
+        # 1. 제목 (도서관 Sponge 구조 우선)
         title_tag = (
-            soup.select_one('.tblw_subj') or 
+            soup.select_one('.sponge-page-guide h4') or # 도서관 표준
             soup.select_one('.subject') or 
+            soup.select_one('h3.title') or # 변형 대응
             soup.select_one('h4.title') or
-            soup.select_one('.bo_v_tit') # 추가됨
+            soup.select_one('.tblw_subj') or 
+            soup.select_one('.bo_v_tit') or
+            soup.select_one('.bbs_view_title') or
+            soup.select_one('.view_title')
         )
         if title_tag:
+            # 내부에 span class="notice-cate" 같은게 있으면 제거
+            for span in title_tag.select("span"):
+                span.decompose()
             data["title"] = title_tag.get_text(strip=True)
 
-        # 2. 날짜 및 조회수 (가장 에러가 많이 나는 부분 -> 안전하게 수정)
+        # 2. 날짜 및 조회수
         date_tag = (
+            soup.select_one('.sponge-page-guide .pull-right') or
+            soup.select_one('.sponge-board-view-info') or # 변형 대응
             soup.select_one('.tblw_date') or 
             soup.select_one('.date') or 
             soup.select_one('.writer_info') or
-            soup.select_one('.bo_v_info') # 추가됨
+            soup.select_one('.bo_v_info') or
+            soup.select_one('.bbs_view_info') or
+            soup.select_one('.view_info')
         )
         
         if date_tag:
             full_text = date_tag.get_text(" ", strip=True)
             
-            # [조회수 추출] 숫자만 안전하게 뽑기
+            # 조회수
             view_match = re.search(r'조회(?:수)?\s*[:]?\s*(\d+)', full_text)
             if view_match:
                 data["univ_views"] = int(view_match.group(1))
-
-            # [날짜 추출 - 핵심 수정]
-            # 년-월-일 (YYYY.MM.DD 또는 YYYY-MM-DD 등) 패턴을 찾음
-            # 바로 unpacking(y,m,d = ...) 하지 않고 개수 확인 후 처리
-            date_match = re.search(r'(\d{4})\s*[\.\-\/]\s*(\d{1,2})\s*[\.\-\/]\s*(\d{1,2})', full_text)
-            
-            if date_match:
-                groups = date_match.groups()
-                if len(groups) == 3:
-                    y, m, d = groups
-                    data["date"] = datetime(int(y), int(m), int(d)).date()
             else:
-                # 혹시 날짜가 YYYY.MM 형태로만 있는 경우 방어 코드 (1일로 설정)
-                short_match = re.search(r'(\d{4})\s*[\.\-\/]\s*(\d{1,2})', full_text)
-                if short_match:
-                    y, m = short_match.groups()
-                    data["date"] = datetime(int(y), int(m), 1).date()
+                nums = re.findall(r'\d+', full_text)
+                if nums and len(nums) > 3: 
+                     data["univ_views"] = int(nums[-1])
+
+            # 날짜
+            date_match = re.search(r'(\d{4})\s*[\.\-\/]\s*(\d{1,2})\s*[\.\-\/]\s*(\d{1,2})', full_text)
+            if date_match:
+                y, m, d = date_match.groups()
+                data["date"] = datetime(int(y), int(m), int(d)).date()
 
         # 3. 첨부파일
-        # .wri_area: 일반, .file_area: 구형
-        for a in soup.select('.wri_area.file a.link_file, .file_area a, .bo_v_file a'):
+        # 도서관 파일은 보통 .sponge-page-guide 하위 a 태그 중 download가 포함된 것
+        file_selectors = '.sponge-page-guide a[href*="download"], .wri_area.file a.link_file, .file_area a, .bo_v_file a, .bbs_view_file a, .view_file a'
+        for a in soup.select(file_selectors):
             f_link = a.get('href')
             if f_link and not f_link.startswith("#"):
-                # 파일명이 없는 경우 대비
                 f_name = a.get_text(strip=True) or "첨부파일"
                 data["files"].append({
                     "name": f_name,
                     "url": urljoin(url, f_link)
                 })
 
-        # 4. 본문 및 이미지
+        # 4. 본문
         content_div = (
+            soup.select_one('.sponge-panel-white-remark') or 
             soup.select_one('.tbl_view') or 
             soup.select_one('.content_view') or 
-            soup.select_one('.bo_v_con')
+            soup.select_one('.bo_v_con') or
+            soup.select_one('.bbs_view_content') or
+            soup.select_one('.view_content')
         )
         
         if content_div:
-            # 이미지 절대경로 변환
+            # 이미지
             for img in content_div.find_all('img'):
                 src = img.get('src')
                 if src:
                     data["images"].append(urljoin(url, src))
             
-            # 텍스트 추출 (스크립트/스타일 태그 제거 후)
+            # 스크립트 제거
             for script in content_div(["script", "style"]):
                 script.decompose()
-                
-            for p in content_div.find_all(['p', 'div', 'span']):
-                text = p.get_text(strip=True)
-                if text: data["texts"].append(text)
+            
+            # 텍스트
+            lines = []
+            for element in content_div.find_all(['p', 'div', 'br', 'li']):
+                text = element.get_text(strip=True)
+                if text:
+                    lines.append(text)
+            
+            if not lines:
+                 data["texts"].append(content_div.get_text("\n", strip=True))
+            else:
+                 data["texts"] = lines
         
         return data
 
     except Exception as e:
-        # 에러가 나더라도 죽지 않고 로그만 남기고 None 반환
-        # (호출하는 쪽에서 건너뛰게 됨)
         logger.error(f"❌ 파싱 로직 에러 ({url}): {e}")
         return None

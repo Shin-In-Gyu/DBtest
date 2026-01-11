@@ -5,24 +5,18 @@ from pathlib import Path
 from dotenv import load_dotenv
 import urllib3
 
-# [배포 최적화] SSL 검증 비활성화 시 발생하는 노이즈 경고를 끕니다.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ---------------------------------------------------------
-# [설정 로드] .env 파일 로드 (여기서 한 번만 수행)
-# ---------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ENV_PATH = BASE_DIR / ".env"
 
 if ENV_PATH.exists():
     load_dotenv(dotenv_path=ENV_PATH)
 else:
-    load_dotenv() # 시스템 환경변수 사용 시
+    load_dotenv()
 
-# [보안] SSL 검증 여부 (기본값: False - 학교 서버 구형 인증서 대비)
 SSL_VERIFY = os.getenv("SSL_VERIFY", "False").lower() == "true"
 
-# [데이터] 공지사항 설정 파일 로드
 JSON_PATH = BASE_DIR / "app" / "core" / "notices.json"
 NOTICE_CONFIGS = {}
 
@@ -33,15 +27,35 @@ except FileNotFoundError:
     print(f"⚠️ [Config] 설정 파일 없음: {JSON_PATH}")
 
 def get_urls(category: str):
-    """카테고리별 URL 및 파라미터 정보 반환"""
-    conf = NOTICE_CONFIGS.get(category, NOTICE_CONFIGS.get("univ", {}))
+    """
+    카테고리별 크롤링에 필요한 URL 정보를 반환합니다.
+    [Update] 'library' 타입과 'main_cms' 타입을 구분하여 처리
+    """
+    conf = NOTICE_CONFIGS.get(category)
+    if not conf:
+        # 설정이 없으면 기본값(univ) 시도
+        conf = NOTICE_CONFIGS.get("univ", {})
+    
     if not conf:
         return "", "", ""
         
-    domain = conf.get("domain", "")
-    menu_id = conf.get("menu_id", "")
+    base_domain = conf.get("domain", "")
+    site_type = conf.get("type", "main_cms") # main_cms or library
     
-    list_url = f"{domain}/menu/{menu_id}.do"
-    info_url = f"{domain}/menu/board/info/{menu_id}.do"
-    
-    return list_url, info_url, conf.get("seq", "")
+    # 1. 도서관 (library) 타입
+    if site_type == "library":
+        # 예: https://lib.kangnam.ac.kr + /Board?n=notice
+        url_path = conf.get("url_path", "/Board?n=notice")
+        list_url = f"{base_domain}{url_path}"
+        # 도서관은 detail_url 생성 시 domain이 필요하므로 info_url 자리에 domain을 넘김
+        return list_url, base_domain, ""
+
+    # 2. 일반 대학 CMS (main_cms) 타입
+    else:
+        menu_id = conf.get("menu_id", "")
+        seq = conf.get("seq", "")
+        
+        list_url = f"{base_domain}/menu/{menu_id}.do"
+        info_url = f"{base_domain}/menu/board/info/{menu_id}.do"
+        
+        return list_url, info_url, seq
