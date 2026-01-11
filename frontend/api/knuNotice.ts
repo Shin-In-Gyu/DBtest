@@ -13,6 +13,7 @@ export type NoticeListItem = {
   author: string;
   category: string;
   is_scraped?: boolean; // 백엔드에서 주는 필드 추가
+  univ_views: number;
 };
 
 // [수정] 백엔드는 배열을 바로 반환하므로 타입을 배열로 변경
