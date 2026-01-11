@@ -22,7 +22,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "홈",
-          headerShown: true,
+          headerShown: false,
           header: () => <HomeHeader />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons

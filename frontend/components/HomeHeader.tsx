@@ -1,42 +1,33 @@
-import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+// frontend/components/HomeHeader.tsx
+import React from 'react';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HomeHeader() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top }]}>
-      <View style={styles.inner}>
-        {/* 왼쪽: 앱 이름 */}
-        <Text style={styles.title} numberOfLines={1}>
-          KNU 공지
-        </Text>
-
-        {/* 오른쪽: 검색 + 알림 */}
-        <View style={styles.right}>
-          <Pressable
-            onPress={() => router.push("/search")}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              pressed && { opacity: 0.6 },
-            ]}
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.content}>
+        <Text style={styles.logoText}>Knoti</Text>
+        
+        <View style={styles.iconGroup}>
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            onPress={() => router.push('/search')}
           >
-            <Ionicons name="search-outline" size={24} />
-          </Pressable>
+            <Ionicons name="search-outline" size={24} color="#333" />
+          </TouchableOpacity>
 
-          <Pressable
-            onPress={() => router.push("/notifications")}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              pressed && { opacity: 0.6 },
-            ]}
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            onPress={() => router.push('/notifications')}
           >
-            <Ionicons name="notifications-outline" size={24} />
-            {/* <View style={styles.badge} /> */}
-          </Pressable>
+            <Ionicons name="notifications-outline" size={24} color="#333" />
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -44,40 +35,30 @@ export default function HomeHeader() {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    backgroundColor: "#fff",
+  container: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  inner: {
+  content: {
     height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
-  title: {
-    fontSize: 18,
-    fontWeight: "800",
-    maxWidth: 160,
+  logoText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#006DB8', // 경북대 메인 컬러 예시
+    letterSpacing: -0.5,
   },
-  right: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  iconGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badge: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#ff3b30",
+  iconButton: {
+    marginLeft: 16,
+    padding: 4,
   },
 });
