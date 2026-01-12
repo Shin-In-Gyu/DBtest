@@ -19,6 +19,7 @@ from app.core.logger import get_logger
 from app.core.http import close_client, get_client
 from app.services import knu_notice_service, notification_service
 from app.routers import knu
+from app.routers import test_router # (파일을 분리했다면)
 
 logger = get_logger()
 scheduler = AsyncIOScheduler()
@@ -99,7 +100,7 @@ async def lifespan(app: FastAPI):
     logger.info("👋 서버 리소스가 정리되었습니다.")
 
 app = FastAPI(lifespan=lifespan, title="K-Now API", version="2.5")
-
+app.include_router(test_router.router) #나중에 삭제 알람 테스트
 app.include_router(knu.router, prefix="/api/knu", tags=["KNU"])
 
 app.add_middleware(

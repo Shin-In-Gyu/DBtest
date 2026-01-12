@@ -9,7 +9,6 @@ from app.core.logger import get_logger
 logger = get_logger()
 
 async def scrape_notice_content(url: str):
-    
     try:
         async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
             response = await client.get(url)

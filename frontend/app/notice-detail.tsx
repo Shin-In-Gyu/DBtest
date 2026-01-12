@@ -20,6 +20,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+// [보안] 일부 서버(도서관 등)는 브라우저 User-Agent가 없으면 이미지를 차단합니다.
+const IMAGE_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+};
 
 async function openUrl(url: string) {
   const can = await Linking.canOpenURL(url);
