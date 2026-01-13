@@ -1,11 +1,7 @@
 # app/routers/knu.py
 # app/routers/knu.py
 import json
-<<<<<<< HEAD
 from typing import List, Optional, Set, Dict, Any
-=======
-from typing import List, Optional, Set
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,19 +36,12 @@ async def read_notices(
     limit = 20
     skip = (page - 1) * limit
     
-<<<<<<< HEAD
-=======
-    # [Fix] q (Optional[str]) 전달 시 Pylance 호환성 확보 (Service 함수 시그니처 수정됨)
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
     results = await knu_notice_service.search_notices(
         db, category, query=q, skip=skip, limit=limit, sort_by=sort_by
     )
 
     if token:
-<<<<<<< HEAD
         # [보완] 토큰 존재 여부 확인 시 fetchone() 방식보다 깔끔한 스칼라 조회
-=======
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
         stmt_device = select(Device).filter(Device.token == token)
         res_device = await db.execute(stmt_device)
         device = res_device.scalars().first()
@@ -81,16 +70,12 @@ async def get_notice_detail(
     notice_in_db = None
     is_scraped = False
 
-<<<<<<< HEAD
     # [2] DB 먼저 확인
-=======
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
     if notice_id:
         stmt = select(Notice).filter(Notice.id == notice_id)
         result = await db.execute(stmt)
         notice_in_db = result.scalars().first()
 
-<<<<<<< HEAD
     # [3] 캐시 로직: DB에 본문 내용이 충분히 있다면 크롤링 건너뛰기
     # 본문 길이가 10자 미만인 경우만 새로 크롤링 (데이터 보강)
     if notice_in_db and notice_in_db.content and len(notice_in_db.content) > 10:
@@ -131,40 +116,6 @@ async def get_notice_detail(
 
     univ_views = scraped_data.get("univ_views", 0)
     app_views = notice_in_db.app_views if notice_in_db else 0
-=======
-        if notice_in_db:
-            if token:
-                stmt_device = select(Device).filter(Device.token == token)
-                res_device = await db.execute(stmt_device)
-                device = res_device.scalars().first()
-                
-                if device:
-                    stmt_check = select(Scrap).filter(
-                        Scrap.device_id == device.id, 
-                        Scrap.notice_id == notice_id
-                    )
-                    res_check = await db.execute(stmt_check)
-                    is_scraped = bool(res_check.scalars().first())
-
-    scraped_data = await scrape_notice_content(url)
-    if not scraped_data:
-        raise HTTPException(status_code=404, detail="원문 페이지를 불러올 수 없습니다.")
-
-    # [Fix] Pylance: notice_in_db가 None이 아님을 보장한 후 접근
-    if notice_in_db:
-        new_full_content = "\n\n".join(scraped_data["texts"])
-        # models.py에 타입 힌트를 추가했으므로 에러 사라짐
-        if notice_in_db.content != new_full_content:
-            notice_in_db.content = new_full_content
-            try:
-                await db.commit()
-            except Exception:
-                await db.rollback()
-
-    univ_views = scraped_data.get("univ_views", 0)
-    app_views = notice_in_db.app_views if notice_in_db else 0
-    total_views = (univ_views or 0) + (app_views or 0)
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
     
     return {
         "id": notice_id if notice_id else 0,
@@ -173,29 +124,16 @@ async def get_notice_detail(
         "date": scraped_data["date"],
         "category": notice_in_db.category if notice_in_db else "unknown",
         "author": notice_in_db.author if notice_in_db else None,
-<<<<<<< HEAD
         "content": "\n\n".join(scraped_data.get("texts", [])),
         "images": scraped_data.get("images", []),
         "files": scraped_data.get("files", []),
         "univ_views": univ_views,
         "app_views": app_views,
         "views": (univ_views or 0) + (app_views or 0),
-=======
-        "content": "\n\n".join(scraped_data["texts"]),
-        "images": scraped_data["images"],
-        "files": scraped_data["files"],
-        "univ_views": univ_views,
-        "app_views": app_views,
-        "views": total_views,
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
         "crawled_at": notice_in_db.crawled_at if notice_in_db else None,
         "is_scraped": is_scraped,
         "summary": notice_in_db.summary if notice_in_db else None
     }
-<<<<<<< HEAD
-=======
-
->>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
 @router.post("/notice/{notice_id}/view")
 async def increment_view_count(notice_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(Notice).filter(Notice.id == notice_id)
