@@ -29,14 +29,22 @@ def inject_data():
         # 2. '장학' 키워드 등록
         cursor.execute("""
             INSERT OR IGNORE INTO keywords (word) 
+<<<<<<< HEAD
             VALUES ('scholar')
+=======
+            VALUES ('장학')
+>>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
         """)
         
         # 방금 넣은(혹은 이미 있던) ID 값 가져오기
         cursor.execute("SELECT id FROM devices WHERE token = 'TEST_TOKEN_12345'")
         device_row = cursor.fetchone()
         
+<<<<<<< HEAD
         cursor.execute("SELECT id FROM keywords WHERE word = 'scholar'")
+=======
+        cursor.execute("SELECT id FROM keywords WHERE word = '장학'")
+>>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
         keyword_row = cursor.fetchone()
 
         if device_row and keyword_row:
@@ -52,7 +60,11 @@ def inject_data():
             conn.commit()
             print("✅ 성공! 데이터를 무사히 넣었습니다.")
             print(f"   - Device ID: {device_id} (토큰: TEST_TOKEN_12345)")
+<<<<<<< HEAD
             print(f"   - Keyword ID: {keyword_id} (키워드: scholar)")
+=======
+            print(f"   - Keyword ID: {keyword_id} (키워드: 장학)")
+>>>>>>> cb5eb5060c66961934542b7071e0afead11e5e4c
             print("👉 이제 서버를 켜고 테스트 버튼을 눌러보세요!")
         else:
             print("❌ ID 조회 실패. 데이터가 제대로 들어가지 않았습니다.")
