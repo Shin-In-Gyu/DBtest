@@ -55,3 +55,9 @@ class DeviceRegisterRequest(BaseModel):
 # [New] [요청용] 스크랩 토글(저장/취소) 요청 시 받을 데이터
 class ScrapRequest(BaseModel):
     token: str # 누가 스크랩을 눌렀는지 식별하기 위해 토큰을 받습니다.
+
+# app/schemas.py 에 추가
+
+class KeywordSubscriptionRequest(BaseModel):
+    token: str  # 기기 식별용 FCM 토큰
+    categories: List[str]  # 사용자가 선택한 카테고리 리스트 (예: ["academic", "scholar"])

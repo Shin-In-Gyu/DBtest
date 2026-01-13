@@ -294,22 +294,27 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
     new_notices_buffer = [] 
     
     for i, result in enumerate(results):
+        # [수정] Exception 타입 체크 강화
         if isinstance(result, Exception) or not result:
-            logger.warning(f"⚠️ 상세 파싱 실패: {meta_info[i]['detail_url']}")
+            logger.warning(f"⚠️ 상세 파싱 실패: {meta_info[i]['detail_url']} | 사유: {result}")
             continue
         
-        # [Fix] Pylance Error: "Unknown | BaseException" is not "Dict[str, Any]"
-        # Pylance에게 이 변수가 확실히 Dict임을 강제로 알립니다(cast).
         scraped_data = cast(Dict[str, Any], result)
-        
         meta = meta_info[i]
-        final_title = scraped_data.get("title") if scraped_data.get("title") else meta["list_title"]
         
+        # [보완] 제목이 크롤링 데이터에 없으면 목록 제목 사용 (Pylance safe)
+        scraped_title = scraped_data.get("title")
+        final_title = str(scraped_title) if scraped_title else meta["list_title"]
+        
+        # [보완] 리스트 형태의 데이터 안전하게 조인
+        content_lines = scraped_data.get("texts", [])
+        final_content = "\n\n".join(content_lines) if isinstance(content_lines, list) else ""
+
         new_notice = Notice(
             title=final_title,
             link=meta["detail_url"],
             date=scraped_data.get("date"),
-            content="\n\n".join(scraped_data.get("texts", [])),
+            content=final_content,
             images=scraped_data.get("images", []),
             files=scraped_data.get("files", []),
             category=meta["category"],
@@ -318,7 +323,6 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
         )
         db.add(new_notice)
         new_notices_buffer.append(new_notice)
-
     if new_notices_buffer:
         try:
             await db.commit()

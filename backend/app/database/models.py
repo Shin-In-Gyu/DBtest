@@ -1,6 +1,6 @@
 # app/database/models.py
 import json
-from sqlalchemy import Integer, String, Text, DateTime, Date, ForeignKey, Table, Index, UniqueConstraint, Column
+from sqlalchemy import Integer, String, Text, DateTime, Date, ForeignKey, Table, Index, UniqueConstraint, Column, Boolean
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 # [수정] date 필드명과 충돌 방지를 위해 alias(별칭) 사용
@@ -53,7 +53,9 @@ class Notice(Base):
     
     univ_views: Mapped[int] = mapped_column(Integer, default=0)
     app_views: Mapped[int] = mapped_column(Integer, default=0)
-    
+    # [보완] 알림 발송 여부 플래그 추가
+    is_notified: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
     crawled_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

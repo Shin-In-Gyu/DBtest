@@ -1,23 +1,26 @@
 # app/routers/knu.py
+# app/routers/knu.py
 import json
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Dict, Any
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_, desc
-
+from sqlalchemy.orm import selectinload # [추가] "selectinload" is not defined 에러 해결
 from app.database.database import get_db
-from app.database.models import Notice, Device, Scrap
+from app.database.models import Notice, Device, Scrap, Keyword
 from app.schemas import (
     NoticeListResponse, 
     NoticeDetailResponse, 
     DeviceRegisterRequest, 
-    ScrapRequest
+    ScrapRequest,
+    KeywordSubscriptionRequest
 )
 from app.services import knu_notice_service
 from app.services.scraper import scrape_notice_content
 from app.core.logger import get_logger
-
+from app.utils.security import ensure_allowed_url # [추가] SSRF 방지용 보안 함수
+from app.core.config import NOTICE_CONFIGS
 router = APIRouter()
 logger = get_logger()
 
@@ -33,12 +36,12 @@ async def read_notices(
     limit = 20
     skip = (page - 1) * limit
     
-    # [Fix] q (Optional[str]) 전달 시 Pylance 호환성 확보 (Service 함수 시그니처 수정됨)
     results = await knu_notice_service.search_notices(
         db, category, query=q, skip=skip, limit=limit, sort_by=sort_by
     )
 
     if token:
+        # [보완] 토큰 존재 여부 확인 시 fetchone() 방식보다 깔끔한 스칼라 조회
         stmt_device = select(Device).filter(Device.token == token)
         res_device = await db.execute(stmt_device)
         device = res_device.scalars().first()
@@ -61,46 +64,58 @@ async def get_notice_detail(
     token: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
+    # [1] 보안: 허용된 도메인인지 먼저 검증 (SSRF 방지)
+    ensure_allowed_url(url) # [수정] 보안 검증 추가
+
     notice_in_db = None
     is_scraped = False
 
+    # [2] DB 먼저 확인
     if notice_id:
         stmt = select(Notice).filter(Notice.id == notice_id)
         result = await db.execute(stmt)
         notice_in_db = result.scalars().first()
 
-        if notice_in_db:
-            if token:
-                stmt_device = select(Device).filter(Device.token == token)
-                res_device = await db.execute(stmt_device)
-                device = res_device.scalars().first()
-                
-                if device:
-                    stmt_check = select(Scrap).filter(
-                        Scrap.device_id == device.id, 
-                        Scrap.notice_id == notice_id
-                    )
-                    res_check = await db.execute(stmt_check)
-                    is_scraped = bool(res_check.scalars().first())
+    # [3] 캐시 로직: DB에 본문 내용이 충분히 있다면 크롤링 건너뛰기
+    # 본문 길이가 10자 미만인 경우만 새로 크롤링 (데이터 보강)
+    if notice_in_db and notice_in_db.content and len(notice_in_db.content) > 10:
+        logger.info(f"💾 [Cache Hit] DB 데이터를 반환합니다: {notice_id}")
+        scraped_data: Dict[str, Any] = {
+            "title": notice_in_db.title,
+            "texts": [notice_in_db.content],
+            "images": notice_in_db.images or [],
+            "files": notice_in_db.files or [],
+            "univ_views": notice_in_db.univ_views,
+            "date": notice_in_db.date
+        }
+    else:
+        # DB에 없거나 본문이 부실하면 실시간 크롤링 수행
+        logger.info(f"🌐 [Scraping] 원문 페이지를 수집합니다: {url}")
+        fetched = await scrape_notice_content(url)
+        if not fetched:
+            raise HTTPException(status_code=404, detail="원문 페이지를 불러올 수 없습니다.")
+        scraped_data = fetched
 
-    scraped_data = await scrape_notice_content(url)
-    if not scraped_data:
-        raise HTTPException(status_code=404, detail="원문 페이지를 불러올 수 없습니다.")
+    # [4] 스크랩 여부 확인
+    if notice_id and token:
+        stmt_device = select(Device).filter(Device.token == token)
+        res_device = await db.execute(stmt_device)
+        device = res_device.scalars().first()
+        if device:
+            stmt_check = select(Scrap).filter(Scrap.device_id == device.id, Scrap.notice_id == notice_id)
+            res_check = await db.execute(stmt_check)
+            is_scraped = bool(res_check.scalars().first())
 
-    # [Fix] Pylance: notice_in_db가 None이 아님을 보장한 후 접근
-    if notice_in_db:
-        new_full_content = "\n\n".join(scraped_data["texts"])
-        # models.py에 타입 힌트를 추가했으므로 에러 사라짐
-        if notice_in_db.content != new_full_content:
-            notice_in_db.content = new_full_content
-            try:
-                await db.commit()
-            except Exception:
-                await db.rollback()
+    # [5] DB 업데이트 (내용이 바뀌었거나 새로 수집된 경우)
+    if notice_in_db and not (notice_in_db.content and len(notice_in_db.content) > 10):
+        notice_in_db.content = "\n\n".join(scraped_data.get("texts", []))
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
 
     univ_views = scraped_data.get("univ_views", 0)
     app_views = notice_in_db.app_views if notice_in_db else 0
-    total_views = (univ_views or 0) + (app_views or 0)
     
     return {
         "id": notice_id if notice_id else 0,
@@ -109,17 +124,16 @@ async def get_notice_detail(
         "date": scraped_data["date"],
         "category": notice_in_db.category if notice_in_db else "unknown",
         "author": notice_in_db.author if notice_in_db else None,
-        "content": "\n\n".join(scraped_data["texts"]),
-        "images": scraped_data["images"],
-        "files": scraped_data["files"],
+        "content": "\n\n".join(scraped_data.get("texts", [])),
+        "images": scraped_data.get("images", []),
+        "files": scraped_data.get("files", []),
         "univ_views": univ_views,
         "app_views": app_views,
-        "views": total_views,
+        "views": (univ_views or 0) + (app_views or 0),
         "crawled_at": notice_in_db.crawled_at if notice_in_db else None,
         "is_scraped": is_scraped,
         "summary": notice_in_db.summary if notice_in_db else None
     }
-
 @router.post("/notice/{notice_id}/view")
 async def increment_view_count(notice_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(Notice).filter(Notice.id == notice_id)
@@ -232,3 +246,62 @@ async def get_my_scraps(token: str, db: AsyncSession = Depends(get_db)):
         notice.is_scraped = True
         
     return scraped_notices
+
+@router.post("/device/subscriptions")
+async def update_device_subscriptions(
+    request: KeywordSubscriptionRequest, 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    사용자의 카테고리 구독 정보를 업데이트합니다. (이미지 UI의 '완료' 대응)
+    """
+    # 1. 기기 존재 확인
+    stmt_device = select(Device).filter(Device.token == request.token).options(selectinload(Device.subscriptions))
+    res_device = await db.execute(stmt_device)
+    device = res_device.scalars().first()
+
+    if not device:
+        # 기기가 없으면 새로 생성
+        device = Device(token=request.token)
+        db.add(device)
+        await db.flush() # ID 생성을 위해 flush
+    
+    # 2. 요청된 카테고리(Keyword) 객체들 가져오기
+    if request.categories:
+        # DB에 이미 존재하는 키워드 조회
+        stmt_keys = select(Keyword).where(Keyword.word.in_(request.categories))
+        res_keys = await db.execute(stmt_keys)
+        existing_keywords = res_keys.scalars().all()
+        existing_words = {k.word for k in existing_keywords}
+
+        # DB에 없는 키워드는 새로 생성
+        new_keywords = [
+            Keyword(word=cat) for cat in request.categories if cat not in existing_words
+        ]
+        if new_keywords:
+            db.add_all(new_keywords)
+            await db.flush()
+            all_keywords = existing_keywords + new_keywords
+        else:
+            all_keywords = existing_keywords
+        
+        # 3. 기기의 구독 리스트 교체 (M:N 관계 업데이트)
+        device.subscriptions = all_keywords
+    else:
+        # 카테고리가 비어있으면 모든 구독 해제
+        device.subscriptions = []
+
+    try:
+        await db.commit()
+        logger.info(f"🔔 구독 업데이트 성공: {device.token[:8]}... -> {request.categories}")
+        return {"message": "subscriptions updated", "count": len(device.subscriptions)}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"❌ 구독 업데이트 실패: {e}")
+        raise HTTPException(status_code=500, detail="Subscription sync failed")
+    
+# [New] 카테고리 매핑 테이블 반환 (프론트 UI용)
+@router.get("/categories")
+async def get_categories():
+    """notices.json 기반으로 영문 키와 한글 이름을 매핑하여 반환합니다."""
+    return [{"key": k, "name": v["name"]} for k, v in NOTICE_CONFIGS.items()]
