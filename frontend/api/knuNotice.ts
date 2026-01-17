@@ -114,3 +114,24 @@ export async function incrementNoticeView(noticeId: number): Promise<void> {
     console.error("조회수 증가 실패:", error);
   }
 }
+export async function updateSubscriptions(params: {
+  token: string;
+  categories: string[];
+}): Promise<{ message: string; count: number }> {
+  const url = `${KNU_API_BASE}/device/subscriptions`;
+  
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`구독 업데이트 실패: ${res.status}\n${text}`);
+  }
+
+  return res.json();
+}
