@@ -21,12 +21,48 @@ export default function NotificationScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<"general" | "dept">("general");
   
+  // [New] 서버 데이터 상태
+  const [serverData, setServerData] = useState<{ general: any[], dept: any[] } | null>(null);
+  
   // [추가] 선택된 카테고리 ID들을 저장하는 상태 (중복 방지를 위해 Set 사용 권장)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
 
-  const generalCats = useMemo(() => category.general, []);
-  const deptCats = useMemo(() => category.dept, []);
+  // [New] 카테고리 데이터 Fetch
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        // [TODO] 실제 API 주소로 변경 필요 (예: process.env.EXPO_PUBLIC_API_URL + "/categories")
+        // 개발 환경에 맞게 IP 주소나 도메인을 설정해주세요.
+        const response = await fetch("http://127.0.0.1:8000/categories");
+        if (response.ok) {
+          const data = await response.json();
+          setServerData(data);
+        }
+      } catch (e) {
+        console.log("카테고리 로드 실패 (기본값 사용):", e);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // [Modified] 서버 데이터 우선 사용 + 로컬 아이콘 매핑
+  const generalCats = useMemo(() => {
+    const source = serverData?.general || category.general;
+    return source.map((item: any) => ({
+      ...item,
+      icon: category.general.find(c => c.id === item.id)?.icon || "school-outline"
+    }));
+  }, [serverData]);
+
+  const deptCats = useMemo(() => {
+    const source = serverData?.dept || category.dept;
+    return source.map((item: any) => ({
+      ...item,
+      icon: category.dept.find(c => c.id === item.id)?.icon || "school-outline"
+    }));
+  }, [serverData]);
+
   const currentData = tab === "general" ? generalCats : deptCats;
 
   /**

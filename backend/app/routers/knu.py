@@ -29,6 +29,9 @@ router = APIRouter()
 logger = get_logger()
 limiter = Limiter(key_func=get_remote_address)
 
+# [New] 일반 카테고리 정의 (순서 지정용)
+GENERAL_CATEGORIES = ["academic", "scholar", "learning", "job", "library", "daeple", "charm"]
+
 # ============================================================
 # 공지사항 목록 조회 (페이지네이션 개선)
 # ============================================================
@@ -39,7 +42,7 @@ async def read_notices(
     q: Optional[str] = Query(None, description="검색어"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("date", regex="^(date|views)$"),
+    sort_by: str = Query("date", pattern="^(date|views)$"),
     token: Optional[str] = Query(None, description="스크랩 확인용 토큰"),
     db: AsyncSession = Depends(get_db)
 ):
@@ -372,11 +375,31 @@ async def update_device_subscriptions(
 # ============================================================
 @router.get("/categories")
 async def get_categories():
-    """notices.json 기반 카테고리 목록 반환"""
-    return [
-        {"key": k, "name": v["name"]} 
-        for k, v in NOTICE_CONFIGS.items()
-    ]
+    """notices.json 기반 카테고리 목록 반환 (프론트엔드 동적 구성용)"""
+    general = []
+    dept = []
+
+    for key, val in NOTICE_CONFIGS.items():
+        item = {
+            "id": key,
+            "label": val.get("name", key)
+        }
+        
+        if key in GENERAL_CATEGORIES:
+            general.append(item)
+        else:
+            dept.append(item)
+            
+    # 일반 카테고리: 지정된 순서대로 정렬
+    general.sort(key=lambda x: GENERAL_CATEGORIES.index(x["id"]) if x["id"] in GENERAL_CATEGORIES else 999)
+    
+    # 학과 카테고리: 이름순 정렬
+    dept.sort(key=lambda x: x["label"])
+
+    return {
+        "general": general,
+        "dept": dept
+    }
 
 # ============================================================
 # 고급 검색 (신규)
