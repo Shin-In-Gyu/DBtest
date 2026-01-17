@@ -19,7 +19,7 @@ from app.services.notification_service import send_keyword_notifications
 
 logger = get_logger()
 SCRAPE_SEMAPHORE = asyncio.Semaphore(3) 
-NOTIFICATION_TARGET_CATEGORIES = {"academic", "job", "scholar", "library", "deeple"}
+NOTIFICATION_TARGET_CATEGORIES = {"academic", "job", "scholar", "library", "daeple"}
 
 async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
     config = NOTICE_CONFIGS.get(category)

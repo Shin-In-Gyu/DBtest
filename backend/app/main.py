@@ -5,9 +5,13 @@ import uvicorn
 import sys
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # [설정] SSL 경고 제거
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -18,11 +22,14 @@ from app.database.database import engine, Base, AsyncSessionLocal, init_db
 from app.core.logger import get_logger
 from app.core.http import close_client, get_client
 from app.services import knu_notice_service, notification_service
-from app.routers import knu
-from app.routers import test_router # (파일을 분리했다면)
+from app.routers import knu, health
+from app.routers import test_router
 
 logger = get_logger()
 scheduler = AsyncIOScheduler()
+
+# [Rate Limiting 설정]
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 async def scheduled_crawl_job():
     logger.info("🚀 [스케줄러] 정기 크롤링 시작")
@@ -34,11 +41,10 @@ async def scheduled_crawl_job():
                 await knu_notice_service.crawl_and_sync_notices(db, cat)
             except asyncio.CancelledError:
                 logger.warning(f"🛑 [{cat}] 작업 취소됨")
-                raise # [중요] 취소 신호를 상위로 전파해야 즉시 종료됨
+                raise
             except Exception as e:
                 logger.error(f"❌ [{cat}] 크롤링 실패: {e}")
         
-        # [Fix] sleep 중에도 취소 신호 체크
         try:
             if i < len(categories) - 1:
                 await asyncio.sleep(2)
@@ -61,8 +67,9 @@ async def lifespan(app: FastAPI):
     # ---------------- [시작 시점] ----------------
     await init_db()
     try:
-        get_client() # 클라이언트 웜업
-    except: pass
+        get_client()
+    except: 
+        pass
     
     logger.info("⚡ API Server Started! (K-Now Backend)")
     notification_service.initialize_firebase()
@@ -73,45 +80,71 @@ async def lifespan(app: FastAPI):
     
     crawl_task = asyncio.create_task(initial_crawl())
     
-    yield # 서버 실행 유지
+    yield
     
     # ---------------- [종료 시점] ----------------
     logger.info("🛑 서버 종료 시퀀스 시작...")
     
-    # 1. 진행 중인 태스크 취소 (타임아웃 적용)
     if not crawl_task.done():
         crawl_task.cancel()
         try:
-            # [핵심] 5초 안에 안 꺼지면 그냥 포기하고 다음 단계로 진행 (무한 대기 방지)
             await asyncio.wait_for(crawl_task, timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             logger.warning("⚠️ 크롤링 작업 강제 종료됨 (Timeout)")
         except Exception as e:
             logger.error(f"⚠️ 작업 종료 중 에러: {e}")
 
-    # 2. 스케줄러 종료
     if scheduler.running:
         scheduler.shutdown(wait=False)
         
-    # 3. 리소스 정리
-    await close_client() # HTTP 클라이언트 종료
-    await engine.dispose() # DB 연결 종료
+    await close_client()
+    await engine.dispose()
     
     logger.info("👋 서버 리소스가 정리되었습니다.")
 
-app = FastAPI(lifespan=lifespan, title="K-Now API", version="2.5")
-app.include_router(test_router.router) #나중에 삭제 알람 테스트
+app = FastAPI(lifespan=lifespan, title="K-Now API", version="2.6")
+
+# [Rate Limiter 등록]
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# [라우터 등록]
+app.include_router(health.router, prefix="/api", tags=["Health"])  # 헬스체크
+app.include_router(test_router.router, tags=["Test"])
 app.include_router(knu.router, prefix="/api/knu", tags=["KNU"])
+
+# [CORS 설정 - 보안 강화]
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS", 
+    "http://localhost:3000,http://localhost:8000"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE", "PUT"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
+# [전역 예외 처리]
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "서버 내부 오류가 발생했습니다."}
+    )
+
+# [404 커스텀 핸들러]
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "요청하신 리소스를 찾을 수 없습니다."}
+    )
+
 if __name__ == "__main__":
-    # [핵심] try-except KeyboardInterrupt 제거 -> Uvicorn에게 신호 처리 위임
-    # uvicorn.run 자체가 내부적으로 시그널 핸들링을 하므로, 
-    # 외부에서 감싸면 충돌이 일어나 터미널이 먹통될 수 있음.
     uvicorn.run(
         "app.main:app", 
         host="0.0.0.0", 

@@ -40,7 +40,7 @@ async def _call_gemini_api(contents_payload: List[Any]) -> Any:
     # Pylance 오류: "models is not a known attribute of None" 해결
     client = CLIENT
     if client is None:
-        raise ValueError("Gemini Client is not initialized")
+        raise ValueError("Gemini Client is not initialized (Check GEMINI_API_KEY)")
     
     # [수정] client가 None이 아님을 보장한 상태에서 호출
     # Pylance 오류: "Expression of type 'None'..." 해결
@@ -52,7 +52,7 @@ async def _call_gemini_api(contents_payload: List[Any]) -> Any:
 async def generate_summary(content: str, image_urls: Optional[List[str]] = None) -> str:
     # 1. 클라이언트 상태 확인
     if CLIENT is None:
-        return "AI 서비스를 사용할 수 없습니다. (API Key Missing)"
+        return "AI 요약 서비스를 사용할 수 없습니다. (API Key 설정 필요)"
 
     base_prompt = """
     역할: 대학생을 위한 공지사항 핵심 요약 비서
