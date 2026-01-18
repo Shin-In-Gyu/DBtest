@@ -71,8 +71,7 @@ async def lifespan(app: FastAPI):
     except: 
         pass
     
-    logger.info("⚡ API Server Started! (K-Now Backend)")
-    notification_service.initialize_firebase()
+    logger.info("⚡ API Server Started! (Kangrimi Backend)")
     
     if not scheduler.running:
         scheduler.add_job(scheduled_crawl_job, 'interval', minutes=30)

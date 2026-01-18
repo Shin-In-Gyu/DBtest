@@ -17,6 +17,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateSubscriptions } from "@/api/knuNotice";
 import { useRouter } from "expo-router";
 import KNU_API_BASE from "@/api/base-uri";
+import * as Notifications from "expo-notifications";
+
+// [New] 앱 실행 중(Foreground)에도 알림이 보이도록 설정
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    // 추가된 부분: Pylance/TypeScript 에러 해결을 위한 필수 필드
+    shouldShowBanner: true,   // 화면 상단 배너 표시 (iOS/Android 공통)
+    shouldShowList: true,     // 알림 센터 목록에 표시 여부
+  }),
+});
 
 const SUBSCRIPTION_KEY = "@knu_subscriptions_v1";
 
@@ -135,6 +148,30 @@ export default function NotificationScreen() {
     }
   };
 
+  // [New] 로컬 알림 테스트 (기기 권한 및 설정 확인용)
+  const handleTestLocalNotification = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '알림 권한을 허용해주세요.');
+      return;
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "🔔 테스트 알림",
+        body: "알림이 정상적으로 도착했습니다! 설정이 완료되었습니다.",
+      },
+      trigger: null, // 즉시 발송
+    });
+  };
+
+  // [New] 토큰 확인 (서버 전송용 토큰 디버깅)
+  const handleShowToken = async () => {
+    const token = await AsyncStorage.getItem("@fcm_token");
+    console.log("Device Token:", token);
+    Alert.alert("Expo Push Token", token || "토큰이 없습니다. 앱을 재실행해보세요.");
+  };
+
   return (
     <>
       {/* [수정] 우측 상단에 '완료' 버튼 배치 */}
@@ -212,6 +249,19 @@ export default function NotificationScreen() {
                   </Pressable>
                 );
               }}
+              ListFooterComponent={
+                <View style={styles.debugFooter}>
+                  <Text style={styles.debugTitle}>🛠️ 알림 테스트 도구</Text>
+                  <View style={styles.debugBtnRow}>
+                    <Pressable onPress={handleTestLocalNotification} style={styles.debugBtn}>
+                      <Text style={styles.debugBtnText}>🔔 로컬 알림 발송</Text>
+                    </Pressable>
+                    <Pressable onPress={handleShowToken} style={styles.debugBtn}>
+                      <Text style={styles.debugBtnText}>🔑 토큰 확인</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              }
             />
           )}
         </View>
@@ -285,4 +335,11 @@ const styles = StyleSheet.create({
   cardText: { fontSize: 13, fontWeight: "800", color: "#4B5563" },
   cardTextSelected: { color: colors.KNU, fontWeight: "900" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  
+  // [New] 디버그용 스타일
+  debugFooter: { marginTop: 40, alignItems: "center", gap: 12, opacity: 0.8 },
+  debugTitle: { fontSize: 12, color: "#9CA3AF", fontWeight: "600" },
+  debugBtnRow: { flexDirection: "row", gap: 12 },
+  debugBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: "#F3F4F6", borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB" },
+  debugBtnText: { fontSize: 12, color: "#4B5563", fontWeight: "600" },
 });

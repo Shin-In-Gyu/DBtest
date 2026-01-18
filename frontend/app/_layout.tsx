@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage"; // [수정
 import KNU_API_BASE from "@/api/base-uri"; // [수정] KNU_API_BASE 추가 (TS2304 해결)
 import { BookmarksProvider } from "./providers/BookmarksProvider";
 import { ReadStatusProvider } from "./providers/ReadStatusProvider";
+import Constants from "expo-constants"; // [추가] 프로젝트 ID 확인용
 
 /**
  * [추가] 푸시 알림 권한 획득 및 기기 등록 로직
@@ -32,8 +33,10 @@ async function registerForPushNotificationsAsync() {
 
   // 2. 기기 토큰 획득
   try {
-    // Expo 프로젝트 설정에 따라 getExpoPushTokenAsync 또는 getDevicePushTokenAsync 사용
-    const tokenData = await Notifications.getDevicePushTokenAsync();
+    // [수정] Expo Go 및 간편한 배포를 위해 ExpoPushToken 사용으로 변경
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: Constants.expoConfig?.extra?.eas?.projectId,
+    });
     token = tokenData.data;
     
     // 3. 로컬 저장소 저장 (notifications.tsx 에서 사용 예정)

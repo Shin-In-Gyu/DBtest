@@ -1,6 +1,4 @@
 # app/services/notification_service.py
-import firebase_admin
-from firebase_admin import credentials, messaging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -9,26 +7,10 @@ from app.core.logger import get_logger
 from collections import defaultdict
 import os
 import asyncio
+import httpx # [추가] HTTP 요청용 (Expo API 호출)
 
 logger = get_logger()
-
-# ---------------------------------------------------------
-# [초기화] 서버 시작 시 1회 실행
-# ---------------------------------------------------------
-def initialize_firebase():
-    if not firebase_admin._apps:
-        key_path = os.getenv("FIREBASE_KEY_PATH", "serviceAccountKey.json")
-        if os.path.exists(key_path):
-            try:
-                cred = credentials.Certificate(key_path)
-                firebase_admin.initialize_app(cred)
-                logger.info("🔥 Firebase Admin SDK 초기화 성공")
-            except Exception as e:
-                logger.error(f"❌ Firebase 초기화 에러: {e}")
-        else:
-            logger.warning(f"⚠️ 키 파일 없음({key_path}): 알림 기능은 스킵됩니다.")
-
-initialize_firebase()
+EXPO_PUSH_API_URL = "https://exp.host/--/api/v2/push/send"
 
 # ---------------------------------------------------------
 # [헬퍼 함수] 유효하지 않은 토큰 DB 삭제
@@ -57,8 +39,8 @@ async def send_keyword_notifications(db: AsyncSession, new_notices: list):
     3. 배치 처리 최적화
     4. 에러 핸들링 강화
     """
-    if not new_notices or not firebase_admin._apps:
-        logger.info("⏭️ 알림 건너뛰기: Firebase 미초기화 또는 공지 없음")
+    if not new_notices:
+        logger.info("⏭️ 알림 건너뛰기: 공지 없음")
         return
 
     # ============================================================
@@ -152,33 +134,19 @@ async def send_keyword_notifications(db: AsyncSession, new_notices: list):
             if (device_id, notice.id) in already_sent:
                 continue
             
-            # 메시지 생성
-            messages_to_send.append(messaging.Message(
-                notification=messaging.Notification(
-                    title=f"🔔 [{notice.category}] 새 공지",
-                    body=notice.title[:100],
-                ),
-                data={
+            # [수정] Expo Push API 포맷으로 메시지 생성
+            messages_to_send.append({
+                "to": token,
+                "title": f"🔔 [{notice.category}] 새 공지",
+                "body": notice.title[:100],
+                "data": {
                     "url": str(notice.link),
                     "id": str(notice.id),
                     "category": str(notice.category)
                 },
-                token=token,
-                android=messaging.AndroidConfig(
-                    priority='high',
-                    notification=messaging.AndroidNotification(
-                        click_action='FLUTTER_NOTIFICATION_CLICK'
-                    )
-                ),
-                apns=messaging.APNSConfig(
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            sound='default',
-                            badge=1
-                        )
-                    )
-                )
-            ))
+                "sound": "default",
+                "badge": 1
+            })
             
             # 발송 이력 기록 준비
             notification_records.append({
@@ -211,48 +179,40 @@ async def send_keyword_notifications(db: AsyncSession, new_notices: list):
     
     logger.info(f"🚀 알림 전송 시작: {len(messages_to_send)}건")
 
-    for i in range(0, len(messages_to_send), batch_size):
-        batch = messages_to_send[i:i + batch_size]
-        batch_records = notification_records[i:i + batch_size]
-        
-        try:
-            response = await loop.run_in_executor(None, messaging.send_each, batch)
+    async with httpx.AsyncClient() as client:
+        for i in range(0, len(messages_to_send), batch_size):
+            batch = messages_to_send[i:i + batch_size]
+            batch_records = notification_records[i:i + batch_size]
             
-            # 전송 결과 처리
-            total_sent += response.success_count
-            total_failed += response.failure_count
-            
-            # 실패한 토큰 수집
-            if response.failure_count > 0:
-                for idx, res in enumerate(response.responses):
-                    if not res.success:
-                        error_code = getattr(res.exception, 'code', None)
-                        
-                        # 유효하지 않은 토큰 처리
-                        if error_code in [
-                            'messaging/registration-token-not-registered',
-                            'messaging/invalid-argument',
-                            'messaging/invalid-registration-token'
-                        ]:
-                            invalid_tokens.append(batch[idx].token)
-                            logger.warning(f"⚠️ 유효하지 않은 토큰: {batch[idx].token[:20]}...")
-                        else:
-                            logger.error(f"❌ 전송 실패 (기타): {error_code}")
-            
-            # 성공한 알림만 이력에 저장
-            successful_records = []
-            for idx, res in enumerate(response.responses):
-                if res.success and idx < len(batch_records):
-                    successful_records.append(
-                        NotificationHistory(**batch_records[idx])
-                    )
-            
-            if successful_records:
-                db.add_all(successful_records)
+            try:
+                # [수정] Expo Push API 호출
+                response = await client.post(EXPO_PUSH_API_URL, json=batch)
+                resp_data = response.json()
                 
-        except Exception as e:
-            logger.error(f"❌ 배치 전송 중 에러: {e}")
-            total_failed += len(batch)
+                data_list = resp_data.get("data", [])
+                
+                successful_records = []
+                
+                for idx, item in enumerate(data_list):
+                    status = item.get("status")
+                    if status == "ok":
+                        total_sent += 1
+                        if idx < len(batch_records):
+                            successful_records.append(NotificationHistory(**batch_records[idx]))
+                    else:
+                        total_failed += 1
+                        details = item.get("details", {})
+                        if details.get("error") == "DeviceNotRegistered":
+                            # 유효하지 않은 토큰 (앱 삭제 등)
+                            invalid_token = batch[idx]["to"]
+                            invalid_tokens.append(invalid_token)
+                
+                if successful_records:
+                    db.add_all(successful_records)
+                    
+            except Exception as e:
+                logger.error(f"❌ 배치 전송 중 에러: {e}")
+                total_failed += len(batch)
     
     # ============================================================
     # 6단계: 정리 작업
@@ -280,22 +240,18 @@ async def send_keyword_notifications(db: AsyncSession, new_notices: list):
 # ---------------------------------------------------------
 async def send_test_notification(token: str, title: str, body: str):
     """테스트용 단일 알림 발송"""
-    if not firebase_admin._apps:
-        logger.error("❌ Firebase 미초기화")
-        return False
-    
     try:
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=title,
-                body=body
-            ),
-            token=token
-        )
+        message = {
+            "to": token,
+            "title": title,
+            "body": body,
+            "sound": "default"
+        }
         
-        response = messaging.send(message)
-        logger.info(f"✅ 테스트 알림 발송 성공: {response}")
-        return True
+        async with httpx.AsyncClient() as client:
+            response = await client.post(EXPO_PUSH_API_URL, json=[message])
+            logger.info(f"✅ 테스트 알림 발송 결과: {response.status_code}")
+            return response.status_code == 200
         
     except Exception as e:
         logger.error(f"❌ 테스트 알림 발송 실패: {e}")
