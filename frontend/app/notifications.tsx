@@ -16,6 +16,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateSubscriptions } from "@/api/knuNotice";
 import { useRouter } from "expo-router";
+import KNU_API_BASE from "@/api/base-uri";
+
+const SUBSCRIPTION_KEY = "@knu_subscriptions_v1";
 
 export default function NotificationScreen() {
   const router = useRouter();
@@ -27,20 +30,36 @@ export default function NotificationScreen() {
   // [추가] 선택된 카테고리 ID들을 저장하는 상태 (중복 방지를 위해 Set 사용 권장)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // [New] 로딩 상태 추가
+
+  // [New] 저장된 구독 설정 불러오기 (UX 개선)
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(SUBSCRIPTION_KEY);
+        if (saved) {
+          setSelectedIds(new Set(JSON.parse(saved)));
+        }
+      } catch (e) {
+        console.log("로컬 구독 정보 로드 실패:", e);
+      }
+    })();
+  }, []);
 
   // [New] 카테고리 데이터 Fetch
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        // [TODO] 실제 API 주소로 변경 필요 (예: process.env.EXPO_PUBLIC_API_URL + "/categories")
-        // 개발 환경에 맞게 IP 주소나 도메인을 설정해주세요.
-        const response = await fetch("http://127.0.0.1:8000/categories");
+        setIsLoading(true);
+        const response = await fetch(`${KNU_API_BASE}/categories`);
         if (response.ok) {
           const data = await response.json();
           setServerData(data);
         }
       } catch (e) {
         console.log("카테고리 로드 실패 (기본값 사용):", e);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchCategories();
@@ -102,6 +121,9 @@ export default function NotificationScreen() {
         categories: Array.from(selectedIds),
       });
 
+      // 로컬 스토리지 업데이트
+      await AsyncStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(Array.from(selectedIds)));
+
       Alert.alert("성공", "알림 설정이 저장되었습니다.", [
         { text: "확인", onPress: () => router.back() }
       ]);
@@ -158,34 +180,40 @@ export default function NotificationScreen() {
             </Pressable>
           </View>
 
-          {/* 카테고리 그리드 리스트 */}
-          <FlatList
-            data={currentData}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            columnWrapperStyle={{ gap: 12 }}
-            contentContainerStyle={{ paddingTop: 14, paddingBottom: 40, gap: 12 }}
-            renderItem={({ item }) => {
-              const isSelected = selectedIds.has(item.id);
-              return (
-                <Pressable 
-                  onPress={() => toggleCategory(item.id)}
-                  style={[styles.card, isSelected && styles.cardSelected]}
-                >
-                  <View style={[styles.iconWrap, isSelected && styles.iconWrapSelected]}>
-                    <Ionicons 
-                      name={isSelected ? "checkmark" : item.icon} 
-                      size={24} 
-                      color={isSelected ? colors.WHITE : colors.BLACK} 
-                    />
-                  </View>
-                  <Text style={[styles.cardText, isSelected && styles.cardTextSelected]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            }}
-          />
+          {/* [수정] 로딩 상태 처리 및 리스트 렌더링 */}
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.KNU} />
+            </View>
+          ) : (
+            <FlatList
+              data={currentData}
+              keyExtractor={(item) => item.id}
+              numColumns={3}
+              columnWrapperStyle={{ gap: 12 }}
+              contentContainerStyle={{ paddingTop: 14, paddingBottom: 40, gap: 12 }}
+              renderItem={({ item }) => {
+                const isSelected = selectedIds.has(item.id);
+                return (
+                  <Pressable 
+                    onPress={() => toggleCategory(item.id)}
+                    style={[styles.card, isSelected && styles.cardSelected]}
+                  >
+                    <View style={[styles.iconWrap, isSelected && styles.iconWrapSelected]}>
+                      <Ionicons 
+                        name={isSelected ? "checkmark" : item.icon} 
+                        size={24} 
+                        color={isSelected ? colors.WHITE : colors.BLACK} 
+                      />
+                    </View>
+                    <Text style={[styles.cardText, isSelected && styles.cardTextSelected]}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+          )}
         </View>
       </SafeAreaView>
     </>
@@ -256,4 +284,5 @@ const styles = StyleSheet.create({
   },
   cardText: { fontSize: 13, fontWeight: "800", color: "#4B5563" },
   cardTextSelected: { color: colors.KNU, fontWeight: "900" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

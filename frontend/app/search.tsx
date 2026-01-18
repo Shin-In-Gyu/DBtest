@@ -93,17 +93,8 @@ export default function SearchScreen() {
     enabled: !!searchQuery, // 검색어가 있을 때만 실행
   });
 
-  // 검색어가 title에 포함된 항목만 필터링
-  const flatItems = useMemo(() => {
-    if (!searchQuery) return rawFlatItems;
-    const queryLower = searchQuery.toLowerCase().trim();
-    if (!queryLower) return rawFlatItems;
-    
-    return rawFlatItems.filter((item) => {
-      const titleLower = (item.title || "").toLowerCase();
-      return titleLower.includes(queryLower);
-    });
-  }, [rawFlatItems, searchQuery]);
+  // [수정] 서버에서 이미 필터링된 결과를 사용하므로 클라이언트 측 중복 필터링 제거
+  const flatItems = rawFlatItems;
 
 
   const onSubmit = () => {

@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
   StatusBar,
+  Share, // [추가] 공유 기능
 } from "react-native";
 // [개선] 기기별 세이프 에어리어 수치를 직접 가져오기 위해 필수
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -68,7 +69,8 @@ function ImageWithLoading({
           source={{ uri: imageUrl, headers: IMAGE_HEADERS }}
           style={[
             isFullWidth ? s.fullWidthImageBase : s.galleryImageBase,
-            { aspectRatio }
+            { aspectRatio },
+            loading && { position: "absolute", opacity: 0 },
           ]}
           resizeMode="contain"
           onLoad={(e) => {
@@ -114,6 +116,19 @@ function FullScreenImageViewer({
   useEffect(() => {
     setCurrentIndex(initialIndex);
   }, [initialIndex]);
+
+  // [추가] 이미지 공유 핸들러
+  const handleShare = async () => {
+    try {
+      const currentImage = images[currentIndex];
+      await Share.share({
+        url: currentImage, // iOS
+        message: currentImage, // Android
+      });
+    } catch (error) {
+      console.log("Share error:", error);
+    }
+  };
 
   if (!visible || images.length === 0) return null;
 
@@ -168,13 +183,19 @@ function FullScreenImageViewer({
               {currentIndex + 1} / {images.length}
             </Text>
           </View>
-          <TouchableOpacity 
-            onPress={onClose} 
-            style={s.fullScreenCloseBtn}
-            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-          >
-            <Ionicons name="close" size={32} color={colors.WHITE} />
-          </TouchableOpacity>
+          
+          {/* [수정] 우측 상단 버튼 그룹 (공유, 닫기) */}
+          <View style={s.headerBtnGroup}>
+            <TouchableOpacity onPress={handleShare} style={s.fullScreenIconBtn}>
+              <Ionicons name="share-outline" size={26} color={colors.WHITE} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={onClose} 
+              style={s.fullScreenIconBtn}
+            >
+              <Ionicons name="close" size={30} color={colors.WHITE} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* [Layer 3] 인디케이터 영역 */}
@@ -374,7 +395,8 @@ const s = StyleSheet.create({
     borderRadius: 20,
   },
   fullScreenHeaderText: { color: colors.WHITE, fontSize: 15, fontWeight: "600" },
-  fullScreenCloseBtn: { 
+  headerBtnGroup: { flexDirection: "row", gap: 12 },
+  fullScreenIconBtn: { 
     width: 44,
     height: 44,
     alignItems: 'center',
