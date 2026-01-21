@@ -7,8 +7,8 @@ export const categories = [
   { id: "scholar", label: "장학" },
   { id: "learning", label: "학습/상담" },
   { id: "job", label: "취창업" },
-  { id: "library", label: "도서관" },
-  { id: "daeple", label: "대플" },
+  { id: "event_internal", label: "행사(교내)" },
+  { id: "event_external", label: "행사(교외)" },
   { id: "charm", label: "참인재" },
 ] as const;
 
@@ -179,8 +179,8 @@ export const category = {
     { id: "scholar", label: "장학", icon: "gift-outline" },
     { id: "learning", label: "학습/상담", icon: "book-outline" },
     { id: "job", label: "취창업", icon: "briefcase-outline" },
-    { id: "library", label: "도서관", icon: "library-outline" },
-    { id: "daeple", label: "대플", icon: "rocket-outline" },
+    { id: "event_internal", label: "행사(교내)", icon: "calendar-outline" },
+    { id: "event_external", label: "행사(교외)", icon: "globe-outline" },
     { id: "charm", label: "참인재", icon: "ribbon-outline" },
   ],
   dept: Object.entries(deptData)

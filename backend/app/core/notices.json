@@ -5,6 +5,20 @@
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 0
   },
+  "event_internal": {
+    "name": "교내행사",
+    "domain": "https://web.kangnam.ac.kr",
+    "menu_id": "e4058249224f49ab163131ce104214fb",
+    "seq": "119",
+    "type": "main_cms"
+  },
+  "event_external": {
+    "name": "교외행사",
+    "domain": "https://web.kangnam.ac.kr",
+    "menu_id": "e4058249224f49ab163131ce104214fb",
+    "seq": "8481",
+    "type": "main_cms"
+  },
   "library": {
     "name": "도서관",
     "type": "library",

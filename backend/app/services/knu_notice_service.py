@@ -19,7 +19,7 @@ from app.services.notification_service import send_keyword_notifications
 
 logger = get_logger()
 SCRAPE_SEMAPHORE = asyncio.Semaphore(3) 
-NOTIFICATION_TARGET_CATEGORIES = {"academic", "job", "scholar", "library", "daeple"}
+NOTIFICATION_TARGET_CATEGORIES = {"academic", "job", "scholar", "event_internal", "event_external"}
 
 async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
     config = NOTICE_CONFIGS.get(category)
@@ -31,9 +31,11 @@ async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
     candidates_map = {}
     
     if site_type == "library":
-        candidates_map = await _crawl_library_list(category, config)
+        # candidates_map = await _crawl_library_list(category, config)
+        pass
     elif site_type == "daeple":  # [Fix] 대플(취창업) 함수 연결
-        candidates_map = await _crawl_daeple_list(category, config)
+        # candidates_map = await _crawl_daeple_list(category, config)
+        pass
     else:
         candidates_map = await _crawl_main_cms_list(category)
 
@@ -50,6 +52,7 @@ async def _crawl_main_cms_list(category: str):
 
     logger.info(f"🔄 [{category}] CMS 목록 가져오는 중...")
     try:
+        params = {"searchMenuSeq": default_seq} if default_seq else {}
         html_text = await fetch_html(list_url, params={"searchMenuSeq": default_seq})
         soup = BeautifulSoup(html_text, "html.parser")
     except Exception as e:
