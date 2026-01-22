@@ -1,16 +1,16 @@
 // src/api/knuNotice.ts
 import {
+  AdvancedSearchResponse,
+  CategoryInfo,
   NoticeDetail,
   NoticeListItem,
   NoticeListResponse,
-  CategoryInfo,
+  ScrapToggleResponse,
+  SearchParams,
   Statistics,
   SubscriptionRequest,
   SubscriptionResponse,
-  ScrapToggleResponse,
   SummaryResponse,
-  SearchParams,
-  AdvancedSearchResponse,
 } from "@/types";
 import KNU_API_BASE from "./base-uri";
 
@@ -28,12 +28,21 @@ function buildUrl(path: string, params?: Record<string, QueryValue>) {
 }
 
 async function safeFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`요청 실패 (${res.status})\n${text.slice(0, 300)}`);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`요청 실패 (${res.status})\n${text.slice(0, 300)}`);
+    }
+    return (await res.json()) as T;
+  } catch (error) {
+    // 네트워크 에러나 연결 실패 시 더 자세한 정보 제공
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      console.error(`[API] 네트워크 에러 - URL: ${url}`, error);
+      throw new Error(`네트워크 연결 실패: ${url}`);
+    }
+    throw error;
   }
-  return (await res.json()) as T;
 }
 
 // ============================================================
@@ -78,9 +87,12 @@ export async function getKnuNotices(params: {
     token: params.token,
   });
 
-  const raw = await safeFetch<BackendNoticeListResponse>(url);
+  // 백엔드(K-Now)는 배열을 그대로 반환: List[NoticeListResponse].
+  // { items: [] } 형태가 아님.
+  const raw = await safeFetch<BackendNoticeListResponse | RawNotice[]>(url);
+  const list = Array.isArray(raw) ? raw : (raw?.items ?? []);
 
-  const items: NoticeListItem[] = raw.items.map((r) => ({
+  const items: NoticeListItem[] = list.map((r) => ({
     id: r.id,
     title: r.title,
     detailUrl: r.link,
@@ -89,17 +101,18 @@ export async function getKnuNotices(params: {
     author: r.author,
     univ_views: r.univ_views,
     app_views: r.app_views,
-    views: r.views,
+    views: r.views ?? r.univ_views ?? r.app_views,
     is_scraped: r.is_scraped,
   }));
 
+  const obj = Array.isArray(raw) ? null : raw;
   return {
-    count: raw.total,
+    count: obj?.total ?? items.length,
     items,
     pagination: {
-      page: raw.page,
-      size: raw.size,
-      total_pages: raw.total_pages,
+      page: obj?.page ?? 1,
+      size: obj?.size ?? 20,
+      total_pages: obj?.total_pages ?? 1,
     },
   };
 }
@@ -234,10 +247,11 @@ export async function getMyScraps(
 ): Promise<NoticeListResponse> {
   const url = buildUrl("/scraps", { token });
   
-  // 스크랩 목록은 배열로 반환됨
-  const raw = await safeFetch<RawNotice[]>(url);
+  // 스크랩: 배열 또는 { items: [] } 형태 모두 처리
+  const raw = await safeFetch<RawNotice[] | { items?: RawNotice[] }>(url);
+  const list = Array.isArray(raw) ? raw : (raw?.items ?? []);
 
-  const items: NoticeListItem[] = raw.map((r) => ({
+  const items: NoticeListItem[] = list.map((r) => ({
     id: r.id,
     title: r.title,
     detailUrl: r.link,
@@ -246,7 +260,7 @@ export async function getMyScraps(
     author: r.author,
     univ_views: r.univ_views,
     app_views: r.app_views,
-    views: r.views,
+    views: r.views ?? r.univ_views ?? r.app_views,
     is_scraped: true,
   }));
 
@@ -280,12 +294,13 @@ export async function advancedSearch(
 ): Promise<AdvancedSearchResponse> {
   const url = buildUrl("/search/advanced", params);
   const raw = await safeFetch<{
-    items: RawNotice[];
+    items?: RawNotice[];
     page: number;
     size: number;
   }>(url);
+  const list = raw?.items ?? [];
 
-  const items: NoticeListItem[] = raw.items.map((r) => ({
+  const items: NoticeListItem[] = list.map((r) => ({
     id: r.id,
     title: r.title,
     detailUrl: r.link,
@@ -294,7 +309,7 @@ export async function advancedSearch(
     author: r.author,
     univ_views: r.univ_views,
     app_views: r.app_views,
-    views: r.views,
+    views: r.views ?? r.univ_views ?? r.app_views,
     is_scraped: r.is_scraped,
   }));
 
@@ -323,4 +338,29 @@ export async function registerDevice(token: string): Promise<void> {
     const text = await res.text();
     throw new Error(`기기 등록 실패: ${res.status}\n${text}`);
   }
+}
+
+// ============================================================
+// 피드백 전송
+// ============================================================
+export async function submitFeedback(params: {
+  title: string;
+  content: string;
+}): Promise<{ success: boolean; message?: string }> {
+  const url = `${KNU_API_BASE}/feedback`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`피드백 전송 실패: ${res.status}\n${text}`);
+  }
+
+  return res.json();
 }

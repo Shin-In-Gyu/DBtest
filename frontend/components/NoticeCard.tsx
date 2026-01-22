@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-export default function NoticeCard({
+function NoticeCard({
   item,
   bookmarked,
   isRead,
@@ -24,8 +24,9 @@ export default function NoticeCard({
     ? (CATEGORY_LABEL[item.category] ?? item.category)
     : null;
 
+  const displayViews = item.views ?? item.univ_views ?? item.app_views;
   const hasMeta =
-    !!categoryText || !!item.date || typeof item.views === "number";
+    !!categoryText || !!item.date || typeof displayViews === "number";
 
   // 검색어 하이라이트 처리
   const renderHighlightedTitle = () => {
@@ -108,19 +109,19 @@ export default function NoticeCard({
             )}
 
             {!!categoryText &&
-              (item.date || typeof item.views === "number") && (
+              (item.date || typeof displayViews === "number") && (
                 <Text style={s.divider}>|</Text>
               )}
 
             {!!item.date && <Text style={s.date}>{item.date}</Text>}
 
-            {!!item.date && typeof item.views === "number" && (
+            {!!item.date && typeof displayViews === "number" && (
               <Text style={s.divider}>|</Text>
             )}
 
-            {typeof item.views === "number" && (
+            {typeof displayViews === "number" && (
               <Text style={s.views}>
-                조회 {item.views.toLocaleString("ko-KR")}
+                조회 {displayViews.toLocaleString("ko-KR")}
               </Text>
             )}
           </View>
@@ -209,3 +210,5 @@ const s = StyleSheet.create({
     paddingVertical: 2,
   },
 });
+
+export default React.memo(NoticeCard);

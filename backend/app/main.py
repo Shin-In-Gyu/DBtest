@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -23,7 +25,6 @@ from app.core.logger import get_logger
 from app.core.http import close_client, get_client
 from app.services import knu_notice_service, notification_service
 from app.routers import knu, health
-from app.routers import test_router
 
 logger = get_logger()
 scheduler = AsyncIOScheduler()
@@ -109,21 +110,36 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # [라우터 등록]
 app.include_router(health.router, prefix="/api", tags=["Health"])  # 헬스체크
-app.include_router(test_router.router, tags=["Test"])
 app.include_router(knu.router, prefix="/api/knu", tags=["KNU"])
 
+# [정적 파일 서빙 - 테스트 페이지]
+@app.get("/")
+async def read_root():
+    """테스트 페이지를 메인 페이지로 제공"""
+    html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "test_connection.html")
+    if os.path.exists(html_path):
+        return FileResponse(html_path)
+    return {"message": "K-Now API", "version": "2.6", "docs": "/docs"}
+
 # [CORS 설정 - 보안 강화]
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", 
-    "http://localhost:3000,http://localhost:8000"
-).split(",")
+# 개발 환경: 모든 origin 허용 (React Native, Expo 등)
+# 프로덕션: 환경 변수로 특정 origin만 허용
+ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
+if ALLOWED_ORIGINS_ENV:
+    ALLOWED_ORIGINS = ALLOWED_ORIGINS_ENV.split(",")
+    ALLOW_CREDENTIALS = True
+else:
+    # 개발 환경: 모든 origin 허용
+    # allow_origins=["*"]와 allow_credentials=True는 함께 사용 불가
+    ALLOWED_ORIGINS = ["*"]
+    ALLOW_CREDENTIALS = False
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "PUT"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_credentials=ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "DELETE", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
 )
 
 # [전역 예외 처리]

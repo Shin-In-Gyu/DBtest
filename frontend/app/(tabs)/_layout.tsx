@@ -77,7 +77,7 @@ export default function TabLayout() {
           header: () => <OtherHeader title="더보기" />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "ellipsis-horizontal" : "ellipsis-horizontal"}
+              name={focused ? "ellipsis-horizontal" : "ellipsis-horizontal-outline"}
               size={26}
               color={color}
             />

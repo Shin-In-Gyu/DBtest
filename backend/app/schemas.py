@@ -44,6 +44,7 @@ class NoticeDetailResponse(NoticeBase):
     # [New] 상세 화면에서도 스크랩 여부를 알아야 하므로 추가
     is_scraped: bool = False
     summary: Optional[str] = None # [New] 요약본 필드 추가(Null 일 수 있음)
+    
     class Config:
         from_attributes = True
 

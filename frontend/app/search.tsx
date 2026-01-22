@@ -1,6 +1,7 @@
 import { useBookmarks } from "@/app/providers/BookmarksProvider";
 import { useReadStatus } from "@/app/providers/ReadStatusProvider";
 import ErrorBanner from "@/components/ErrorBanner";
+import { toUserFriendlyMessage } from "@/utils/errorMessage";
 import NoticeCard from "@/components/NoticeCard";
 import OtherHeader from "@/components/OtherHeader";
 import { colors } from "@/constants";
@@ -93,8 +94,17 @@ export default function SearchScreen() {
     enabled: !!searchQuery, // 검색어가 있을 때만 실행
   });
 
-  // [수정] 서버에서 이미 필터링된 결과를 사용하므로 클라이언트 측 중복 필터링 제거
-  const flatItems = rawFlatItems;
+  // 검색어가 title에 포함된 항목만 필터링
+  const flatItems = useMemo(() => {
+    if (!searchQuery) return rawFlatItems;
+    const queryLower = searchQuery.toLowerCase().trim();
+    if (!queryLower) return rawFlatItems;
+    
+    return rawFlatItems.filter((item) => {
+      const titleLower = (item.title || "").toLowerCase();
+      return titleLower.includes(queryLower);
+    });
+  }, [rawFlatItems, searchQuery]);
 
 
   const onSubmit = () => {
@@ -200,9 +210,7 @@ export default function SearchScreen() {
             <>
               {!!error && (
                 <ErrorBanner
-                  message={
-                    error instanceof Error ? error.message : "오류가 발생했습니다."
-                  }
+                  message={toUserFriendlyMessage(error)}
                   onRetry={() => refetch()}
                 />
               )}

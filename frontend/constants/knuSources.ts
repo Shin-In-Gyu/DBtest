@@ -7,14 +7,10 @@ export const categories = [
   { id: "scholar", label: "장학" },
   { id: "learning", label: "학습/상담" },
   { id: "job", label: "취창업" },
-  { id: "event_internal", label: "행사(교내)" },
-  { id: "event_external", label: "행사(교외)" },
+  { id: "library", label: "도서관" },
+  { id: "daeple", label: "대플" },
   { id: "charm", label: "참인재" },
 ] as const;
-
-export const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
-  categories.map((c) => [c.id, c.label]),
-);
 
 // 백엔드에서 받은 학과 데이터 타입
 export type DeptData = {
@@ -148,6 +144,14 @@ export const deptData: Record<string, DeptData> = {
   },
 };
 
+// id(영문) → 한글 라벨. 공통 카테고리 + 학과( deptData.name ) → 공지 카드 등에서 한글 표시
+export const CATEGORY_LABEL: Record<string, string> = {
+  ...Object.fromEntries(categories.map((c) => [c.id, c.label])),
+  ...Object.fromEntries(
+    Object.entries(deptData).map(([id, d]) => [id, d.name])
+  ),
+};
+
 // 학과별 아이콘 매핑 (필요시 수정 가능)
 const deptIconMap: Record<string, string> = {
   dls: "star-outline",
@@ -179,8 +183,8 @@ export const category = {
     { id: "scholar", label: "장학", icon: "gift-outline" },
     { id: "learning", label: "학습/상담", icon: "book-outline" },
     { id: "job", label: "취창업", icon: "briefcase-outline" },
-    { id: "event_internal", label: "행사(교내)", icon: "calendar-outline" },
-    { id: "event_external", label: "행사(교외)", icon: "globe-outline" },
+    { id: "library", label: "도서관", icon: "library-outline" },
+    { id: "daeple", label: "대플", icon: "rocket-outline" },
     { id: "charm", label: "참인재", icon: "ribbon-outline" },
   ],
   dept: Object.entries(deptData)

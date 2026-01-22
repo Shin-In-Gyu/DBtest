@@ -26,7 +26,7 @@ export default function DeptSelectScreen() {
 
   const allDepts = useMemo(
     () =>
-      categoryOptions.dept.map((d) => ({
+      (categoryOptions?.dept ?? []).map((d) => ({
         id: d.id,
         label: d.label,
       })),

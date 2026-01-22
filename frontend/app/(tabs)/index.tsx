@@ -1,30 +1,76 @@
-// frontend/app/(tabs)/index.tsx
 import ErrorBanner from "@/components/ErrorBanner";
 import NoticeCard from "@/components/NoticeCard";
 import { colors } from "@/constants";
+import { categories } from "@/constants/knuSources";
 import { useKnuNotices } from "@/hooks/useKNUNoitces";
+import type { NoticeListItem } from "@/types";
+import { toUserFriendlyMessage } from "@/utils/errorMessage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
-  Dimensions,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from "react-native";
 import { useBookmarks } from "../providers/BookmarksProvider";
 import { useReadStatus } from "../providers/ReadStatusProvider";
-import { categories } from "@/constants/knuSources";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type TabItem = { id: string; label: string };
+
+/** renderItem 인라인 콜백 제거·메모 — VirtualizedList 경고 완화 */
+const NoticeCardRow = React.memo(function NoticeCardRow({
+  item,
+  bookmarked,
+  isRead,
+  tabKey,
+  deptKey,
+  toggleBookmark,
+}: {
+  item: NoticeListItem;
+  bookmarked: boolean;
+  isRead: boolean;
+  tabKey: string;
+  deptKey: string | null;
+  toggleBookmark: (item: any, source: string) => void;
+}) {
+  const handlePress = useCallback(() => {
+    router.push({
+      pathname: "/notice-detail",
+      params: {
+        url: item.detailUrl,
+        noticeId: item.id?.toString() || "",
+        title: item.title || "",
+      },
+    });
+  }, [item.detailUrl, item.id, item.title]);
+
+  const handleToggle = useCallback(() => {
+    toggleBookmark(
+      { ...item, detailUrl: item.detailUrl },
+      tabKey === "dept" ? (deptKey ?? "dept") : tabKey
+    );
+  }, [item, tabKey, deptKey, toggleBookmark]);
+
+  return (
+    <NoticeCard
+      item={item}
+      bookmarked={bookmarked}
+      isRead={isRead}
+      onPress={handlePress}
+      onToggleBookmark={handleToggle}
+    />
+  );
+});
 
 /**
  * [컴포넌트] 개별 공지사항 리스트 페이지
@@ -119,7 +165,7 @@ function NoticeListPage({
     <View style={{ width: SCREEN_WIDTH, flex: 1 }}>
       {!!error && noticesEnabled && (
         <ErrorBanner
-          message={error instanceof Error ? error.message : "오류가 발생했습니다."}
+          message={toUserFriendlyMessage(error)}
           onRetry={() => refetch()}
         />
       )}
@@ -128,27 +174,13 @@ function NoticeListPage({
         data={flatItems}
         keyExtractor={(item, index) => `${listKey}::${item.detailUrl}::${index}`}
         renderItem={({ item }) => (
-          <NoticeCard
+          <NoticeCardRow
             item={item}
             bookmarked={isBookmarked(item.detailUrl)}
             isRead={isRead(item.detailUrl)}
-            onPress={() => {
-              // [수정] 상세 페이지 이동도 안전을 위해 객체 형태 권장
-              router.push({
-                pathname: "/notice-detail",
-                params: {
-                  url: item.detailUrl,
-                  noticeId: item.id?.toString() || "",
-                  title: item.title || "",
-                },
-              });
-            }}
-            onToggleBookmark={() =>
-              toggleBookmark(
-                { ...item, detailUrl: item.detailUrl },
-                tabKey === "dept" ? (deptKey ?? "dept") : tabKey
-              )
-            }
+            tabKey={tabKey}
+            deptKey={deptKey}
+            toggleBookmark={toggleBookmark}
           />
         )}
         contentContainerStyle={flatItems.length === 0 ? s.emptyContainer : s.listContent}
@@ -170,6 +202,8 @@ function NoticeListPage({
         }
         ListFooterComponent={footer}
         removeClippedSubviews={true}
+        windowSize={11}
+        maxToRenderPerBatch={10}
       />
     </View>
   );
