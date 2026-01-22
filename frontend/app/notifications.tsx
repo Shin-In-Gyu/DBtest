@@ -1,6 +1,5 @@
-// frontend/app/notifications.tsx
 import KNU_API_BASE from "@/api/base-uri";
-import { updateSubscriptions } from "@/api/knuNotice";
+import { getSubscriptions, updateSubscriptions } from "@/api/knuNotice";
 import OtherHeader from "@/components/OtherHeader";
 import { category, colors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +17,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const STORAGE_KEY = "@notification_subscriptions";
+
 export default function NotificationScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<"general" | "dept">("general");
@@ -28,6 +29,41 @@ export default function NotificationScreen() {
   // [추가] 선택된 카테고리 ID들을 저장하는 상태 (중복 방지를 위해 Set 사용 권장)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
+
+  // [저장된 구독 불러오기] 서버 우선, 실패 시 로컬(AsyncStorage)
+  useEffect(() => {
+    const loadSaved = async () => {
+      try {
+        const token = await AsyncStorage.getItem("@fcm_token");
+        let loaded = false;
+        if (token) {
+          try {
+            const res = await getSubscriptions(token);
+            if (res?.categories && Array.isArray(res.categories)) {
+              setSelectedIds(new Set(res.categories));
+              loaded = true;
+            }
+          } catch {
+            // 서버에 GET 구독 API 없거나 실패 시 로컬 사용
+          }
+        }
+        if (!loaded) {
+          const raw = await AsyncStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            try {
+              const arr = JSON.parse(raw);
+              if (Array.isArray(arr)) setSelectedIds(new Set(arr));
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadSaved();
+  }, []);
 
   // [New] 카테고리 데이터 Fetch — 백엔드 /api/knu/categories 사용
   useEffect(() => {
@@ -51,11 +87,12 @@ export default function NotificationScreen() {
     fetchCategories();
   }, []);
 
-  // [Modified] 서버 데이터 우선 사용 + 로컬 아이콘 매핑
+  // [Modified] 서버 데이터 우선 사용 + 로컬 아이콘 매핑 (label: id/name/label 모두 지원)
   const generalCats = useMemo(() => {
     const source = serverData?.general || category.general;
     return (source ?? []).map((item: any) => ({
       ...item,
+      label: item.label ?? item.name ?? item.id,
       icon: category.general.find(c => c.id === item.id)?.icon || "school-outline"
     }));
   }, [serverData]);
@@ -64,6 +101,7 @@ export default function NotificationScreen() {
     const source = serverData?.dept || category.dept;
     return (source ?? []).map((item: any) => ({
       ...item,
+      label: item.label ?? item.name ?? item.id,
       icon: category.dept.find(c => c.id === item.id)?.icon || "school-outline"
     }));
   }, [serverData]);
@@ -86,33 +124,41 @@ export default function NotificationScreen() {
   };
 
   /**
-   * [로직] 서버에 설정 저장
+   * [로직] 서버에 구독 전송 + 로컬(AsyncStorage)에 체크 상태 저장
+   * - 서버 성공: 로컬에도 저장하고, 체크된 카테고리 푸시 수신 가능
+   * - 서버 실패(500 등): 로컬에만 저장해 두고, 다음에 '완료' 다시 누르면 재전송
    */
   const handleSave = async () => {
     if (isSaving) return;
-    
+
+    const ids = Array.from(selectedIds);
+
     try {
       setIsSaving(true);
-      // 로컬에 저장된 FCM 토큰 가져오기 (기기 등록 시 저장해둔 값)
       const token = await AsyncStorage.getItem("@fcm_token");
-      
+
       if (!token) {
-        Alert.alert("알림", "기기 등록 정보를 찾을 수 없습니다. 앱을 재실행해 주세요.");
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+        Alert.alert(
+          "알림",
+          "기기 등록 정보를 찾을 수 없습니다. 앱을 재실행한 뒤 '완료'를 다시 눌러 주세요."
+        );
         return;
       }
 
-      // 서버로 구독 정보 전송
-      await updateSubscriptions({
-        token,
-        categories: Array.from(selectedIds),
-      });
+      await updateSubscriptions({ token, categories: ids });
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
 
-      Alert.alert("성공", "알림 설정이 저장되었습니다.", [
+      Alert.alert("성공", "알림 설정이 저장되었습니다. 선택한 카테고리의 새 공지를 푸시로 받을 수 있습니다.", [
         { text: "확인", onPress: () => router.back() }
       ]);
     } catch (error) {
       console.error("Save Subscriptions Error:", error);
-      Alert.alert("오류", "설정 저장 중 문제가 발생했습니다.");
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+      Alert.alert(
+        "알림",
+        "선택한 카테고리가 기기에 저장되었습니다. 푸시 알림 서버와 동기화하지 못했을 수 있으니, 나중에 다시 '완료'를 눌러 주세요."
+      );
     } finally {
       setIsSaving(false);
     }

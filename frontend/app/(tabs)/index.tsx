@@ -1,21 +1,16 @@
-import ErrorBanner from "@/components/ErrorBanner";
-import NoticeCard from "@/components/NoticeCard";
+import { DeptSubTabs } from "@/components/DeptSubTabs";
+import { NoticeListPage } from "@/components/NoticeListPage";
 import { colors } from "@/constants";
 import { categories } from "@/constants/knuSources";
-import { useKnuNotices } from "@/hooks/useKNUNoitces";
-import type { NoticeListItem } from "@/types";
-import { toUserFriendlyMessage } from "@/utils/errorMessage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -27,187 +22,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type TabItem = { id: string; label: string };
 
-/** renderItem 인라인 콜백 제거·메모 — VirtualizedList 경고 완화 */
-const NoticeCardRow = React.memo(function NoticeCardRow({
-  item,
-  bookmarked,
-  isRead,
-  tabKey,
-  deptKey,
-  toggleBookmark,
-}: {
-  item: NoticeListItem;
-  bookmarked: boolean;
-  isRead: boolean;
-  tabKey: string;
-  deptKey: string | null;
-  toggleBookmark: (item: any, source: string) => void;
-}) {
-  const handlePress = useCallback(() => {
-    router.push({
-      pathname: "/notice-detail",
-      params: {
-        url: item.detailUrl,
-        noticeId: item.id?.toString() || "",
-        title: item.title || "",
-      },
-    });
-  }, [item.detailUrl, item.id, item.title]);
-
-  const handleToggle = useCallback(() => {
-    toggleBookmark(
-      { ...item, detailUrl: item.detailUrl },
-      tabKey === "dept" ? (deptKey ?? "dept") : tabKey
-    );
-  }, [item, tabKey, deptKey, toggleBookmark]);
-
-  return (
-    <NoticeCard
-      item={item}
-      bookmarked={bookmarked}
-      isRead={isRead}
-      onPress={handlePress}
-      onToggleBookmark={handleToggle}
-    />
-  );
-});
-
-/**
- * [컴포넌트] 개별 공지사항 리스트 페이지
- */
-function NoticeListPage({
-  tabKey,
-  deptKey,
-  isBookmarked,
-  isRead,
-  toggleBookmark,
-}: {
-  tabKey: string;
-  deptKey: string | null;
-  isBookmarked: (url: string) => boolean;
-  isRead: (url: string) => boolean;
-  toggleBookmark: (item: any, source: string) => void;
-}) {
-  const noticesEnabled = tabKey !== "dept" || !!deptKey;
-  const effectiveSourceKey = tabKey === "dept" ? (deptKey ?? "__unset__") : tabKey;
-  const listKey = tabKey === "dept" ? `dept:${deptKey ?? "unset"}` : tabKey;
-
-  const {
-    flatItems,
-    isFetching,
-    isRefetching,
-    isFetchingNextPage,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    refetch,
-  } = useKnuNotices({
-    pageSize: 20,
-    sourceKey: effectiveSourceKey,
-    enabled: noticesEnabled,
-  });
-
-  const footer = useMemo(() => {
-    if (!noticesEnabled) return null;
-    if (isFetchingNextPage) {
-      return (
-        <View style={s.footer}>
-          <ActivityIndicator color={colors.KNU} />
-          <Text style={s.footerText}>불러오는 중...</Text>
-        </View>
-      );
-    }
-    if (!hasNextPage) {
-      return (
-        <View style={s.footer}>
-          <Text style={s.footerText}>마지막입니다</Text>
-        </View>
-      );
-    }
-    return (
-      <View style={s.footer}>
-        <Pressable
-          onPress={() => fetchNextPage()}
-          style={({ pressed }) => [s.loadMoreBtn, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={s.loadMoreText}>더 불러오기</Text>
-        </Pressable>
-      </View>
-    );
-  }, [noticesEnabled, isFetchingNextPage, hasNextPage, fetchNextPage]);
-
-  if (tabKey === "dept" && !deptKey) {
-    return (
-      <View style={[s.deptEmptyWrap, { width: SCREEN_WIDTH }]}>
-        <Text style={s.deptEmptyTitle}>학과를 설정하세요.</Text>
-        <Text style={s.deptEmptyDesc}>
-          학과를 선택하면 해당 학과 공지사항을 보여드릴게요.
-        </Text>
-
-        {/* [수정] router.push 인자를 객체 형태로 변경하여 TypeScript 에러(TS2345) 해결 */}
-        <Pressable
-          onPress={() => 
-            router.push({
-              pathname: "/dept-select",
-              params: { selectedId: deptKey || "" }
-            })
-          }
-          style={({ pressed }) => [s.deptBtn, pressed && { opacity: 0.8 }]}
-        >
-          <Text style={s.deptBtnText}>학과설정하기</Text>
-        </Pressable>
-      </View>
-    );
-    
-  }
-
-  return (
-    <View style={{ width: SCREEN_WIDTH, flex: 1 }}>
-      {!!error && noticesEnabled && (
-        <ErrorBanner
-          message={toUserFriendlyMessage(error)}
-          onRetry={() => refetch()}
-        />
-      )}
-
-      <FlatList
-        data={flatItems}
-        keyExtractor={(item, index) => `${listKey}::${item.detailUrl}::${index}`}
-        renderItem={({ item }) => (
-          <NoticeCardRow
-            item={item}
-            bookmarked={isBookmarked(item.detailUrl)}
-            isRead={isRead(item.detailUrl)}
-            tabKey={tabKey}
-            deptKey={deptKey}
-            toggleBookmark={toggleBookmark}
-          />
-        )}
-        contentContainerStyle={flatItems.length === 0 ? s.emptyContainer : s.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => refetch()}
-            tintColor={colors.KNU}
-          />
-        }
-        onEndReached={() => {
-          if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-        }}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={
-          <Text style={s.helperText}>
-            {isFetching ? "불러오는 중..." : "표시할 공지사항이 없습니다."}
-          </Text>
-        }
-        ListFooterComponent={footer}
-        removeClippedSubviews={true}
-        windowSize={11}
-        maxToRenderPerBatch={10}
-      />
-    </View>
-  );
-}
+const DEPT_STORAGE_KEY_V1 = "@knu_selected_dept_v1";
+const DEPT_STORAGE_KEY_V2 = "@knu_selected_depts_v2";
 
 export default function HomeScreen() {
   const tabs: TabItem[] = useMemo(() => {
@@ -218,20 +34,120 @@ export default function HomeScreen() {
   }, []);
 
   const [tabKey, setTabKey] = useState<TabItem["id"]>(tabs[0]?.id ?? "all");
-  const [deptKey, setDeptKey] = useState<string | null>(null);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [selectedDeptIndex, setSelectedDeptIndex] = useState<number>(0);
 
   const pagerRef = useRef<FlatList>(null);
   const tabListRef = useRef<FlatList>(null);
 
+  // 데이터 마이그레이션 및 로드
   useFocusEffect(
     useCallback(() => {
       (async () => {
         try {
-          const stored = await AsyncStorage.getItem("@knu_selected_dept_v1");
-          if (stored) setDeptKey(stored);
-        } catch {}
+          // v2 데이터 먼저 확인
+          const v2Data = await AsyncStorage.getItem(DEPT_STORAGE_KEY_V2);
+          if (v2Data) {
+            const parsed = JSON.parse(v2Data);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setSelectedDepts(parsed);
+              setSelectedDeptIndex(0);
+              return;
+            }
+          }
+
+          // v1 데이터가 있으면 v2로 마이그레이션
+          const v1Data = await AsyncStorage.getItem(DEPT_STORAGE_KEY_V1);
+          if (v1Data) {
+            const migrated = [v1Data];
+            await AsyncStorage.setItem(DEPT_STORAGE_KEY_V2, JSON.stringify(migrated));
+            setSelectedDepts(migrated);
+            setSelectedDeptIndex(0);
+            // v1 데이터는 유지 (선택사항)
+          }
+        } catch (error) {
+          console.error("학과 데이터 로드 실패:", error);
+        }
       })();
     }, [])
+  );
+
+  // 선택된 학과 저장
+  const saveSelectedDepts = useCallback(async (depts: string[]) => {
+    try {
+      await AsyncStorage.setItem(DEPT_STORAGE_KEY_V2, JSON.stringify(depts));
+      setSelectedDepts(depts);
+    } catch (error) {
+      console.error("학과 데이터 저장 실패:", error);
+    }
+  }, []);
+
+  // 학과 추가
+  const handleAddDept = useCallback(() => {
+    router.push({
+      pathname: "/dept-select",
+      params: {
+        selectedIds: JSON.stringify(selectedDepts),
+      },
+    });
+  }, [selectedDepts]);
+
+  // 학과 삭제
+  const handleRemoveDept = useCallback(
+    (index: number) => {
+      const newDepts = selectedDepts.filter((_, i) => i !== index);
+      saveSelectedDepts(newDepts);
+
+      // 삭제된 항목이 현재 선택이었으면 인덱스 조정
+      if (newDepts.length === 0) {
+        setSelectedDeptIndex(0);
+      } else if (index === selectedDeptIndex) {
+        // 삭제된 항목이 현재 선택이면 이전 항목 선택 (없으면 첫 번째)
+        setSelectedDeptIndex(Math.max(0, index - 1));
+      } else if (index < selectedDeptIndex) {
+        // 삭제된 항목이 현재 선택보다 앞이면 인덱스 감소
+        setSelectedDeptIndex(selectedDeptIndex - 1);
+      }
+    },
+    [selectedDepts, selectedDeptIndex, saveSelectedDepts]
+  );
+
+  // 학과 선택 (하위 탭에서)
+  const handleSelectDept = useCallback((index: number) => {
+    setSelectedDeptIndex(index);
+  }, []);
+
+  // 학과 추가 후 콜백 (dept-select에서 돌아올 때)
+  useFocusEffect(
+    useCallback(() => {
+      const checkForNewDept = async () => {
+        try {
+          const stored = await AsyncStorage.getItem(DEPT_STORAGE_KEY_V2);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              const currentStr = JSON.stringify(selectedDepts);
+              const storedStr = JSON.stringify(parsed);
+              
+              // 데이터가 변경되었는지 확인
+              if (currentStr !== storedStr) {
+                setSelectedDepts(parsed);
+                
+                // 새로운 학과가 추가되었는지 확인
+                if (parsed.length > selectedDepts.length) {
+                  // 새로 추가된 학과 선택
+                  setSelectedDeptIndex(parsed.length - 1);
+                } else if (selectedDeptIndex >= parsed.length) {
+                  // 현재 선택된 인덱스가 범위를 벗어나면 조정
+                  setSelectedDeptIndex(Math.max(0, parsed.length - 1));
+                }
+              }
+            }
+          }
+        } catch {}
+      };
+      checkForNewDept();
+    }, [selectedDepts, selectedDeptIndex])
   );
 
   const { isBookmarked, toggleBookmark } = useBookmarks();
@@ -254,6 +170,11 @@ export default function HomeScreen() {
       });
     }
   };
+
+  const currentDeptKey =
+    tabKey === "dept" && selectedDepts.length > 0
+      ? selectedDepts[selectedDeptIndex] ?? null
+      : null;
 
   return (
     <View style={s.container}>
@@ -283,6 +204,17 @@ export default function HomeScreen() {
         />
       </View>
 
+      {/* 학과 탭일 때만 하위 탭 바 표시 */}
+      {tabKey === "dept" && selectedDepts.length > 0 && (
+        <DeptSubTabs
+          selectedDepts={selectedDepts}
+          selectedIndex={selectedDeptIndex}
+          onSelect={handleSelectDept}
+          onAdd={handleAddDept}
+          onRemove={handleRemoveDept}
+        />
+      )}
+
       <FlatList
         ref={pagerRef}
         data={tabs}
@@ -294,7 +226,9 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <NoticeListPage
             tabKey={item.id}
-            deptKey={deptKey}
+            deptKey={item.id === "dept" ? currentDeptKey : null}
+            selectedDepts={selectedDepts}
+            onAddDept={handleAddDept}
             isBookmarked={isBookmarked}
             isRead={isRead}
             toggleBookmark={toggleBookmark}
@@ -329,40 +263,4 @@ const s = StyleSheet.create({
   tabBtnActive: { backgroundColor: colors.KNU },
   tabText: { fontSize: 13, fontWeight: "700", color: "#334155" },
   tabTextActive: { color: "#fff" },
-
-  deptEmptyWrap: {
-    flex: 1,
-    padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  deptEmptyTitle: { fontSize: 18, fontWeight: "900", color: "#111827" },
-  deptEmptyDesc: { color: "#6b7280", fontSize: 13, textAlign: "center" },
-  deptBtn: {
-    marginTop: 6,
-    backgroundColor: colors.KNU,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  deptBtnText: { color: "#fff", fontWeight: "900" },
-
-  helperText: { color: "#6b7280", fontSize: 14, marginTop: 4, textAlign: 'center' },
-  listContent: { padding: 12, gap: 10 },
-  emptyContainer: {
-    flexGrow: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  footer: { paddingVertical: 16, alignItems: "center", gap: 10 },
-  footerText: { color: "#6b7280", fontSize: 13 },
-  loadMoreBtn: {
-    backgroundColor: colors.KNU,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  loadMoreText: { color: colors.WHITE, fontWeight: "800" },
 });

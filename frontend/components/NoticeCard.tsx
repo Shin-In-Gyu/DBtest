@@ -91,10 +91,22 @@ function NoticeCard({
       style={({ pressed }) => [
         s.card,
         isRead && s.cardRead,
+        item.is_pinned && s.cardPinned, // [추가] 필독 공지 강조
         pressed && s.pressed,
       ]}
     >
-      {renderHighlightedTitle()}
+      {/* [수정] 제목과 필독 배지를 한 줄에 배치 */}
+      <View style={s.titleRow}>
+        {item.is_pinned && (
+          <View style={s.pinnedBadge}>
+            <Ionicons name="push-outline" size={11} color={colors.KNU} />
+            <Text style={s.pinnedText}>필독</Text>
+          </View>
+        )}
+        <View style={s.titleContainer}>
+          {renderHighlightedTitle()}
+        </View>
+      </View>
 
       {hasMeta && (
         <View style={s.metaRow}>
@@ -166,7 +178,44 @@ const s = StyleSheet.create({
     backgroundColor: "#f9fafb",
     opacity: 0.8,
   },
+  cardPinned: {
+    backgroundColor: "#E3F2FD", // [추가] 필독 공지 연한 하늘색색 배경
+    borderColor: colors.KNU,
+    borderWidth: 1,
+  },
   pressed: { opacity: 0.85 },
+  
+  // [추가] 제목 행 (필독 배지 + 제목)
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  
+  // [수정] 필독 배지 스타일 - 제목과 같은 줄
+  pinnedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.WHITE,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    gap: 3,
+    borderWidth: 1,
+    borderColor: colors.KNU,
+    marginTop: 2, // 제목과 세로 정렬 맞추기
+  },
+  pinnedText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.KNU,
+  },
+  
+  // [추가] 제목 컨테이너
+  titleContainer: {
+    flex: 1,
+  },
+  
   title: { fontSize: 16, fontWeight: "700", color: "#111827" },
   titleRead: { color: "#6b7280", fontWeight: "600" },
   titleHighlight: {

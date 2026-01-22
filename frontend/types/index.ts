@@ -22,6 +22,7 @@ export type NoticeListItem = {
   app_views?: number;
   views?: number;
   is_scraped?: boolean;
+  is_pinned?: boolean; // [추가] 필독 공지 여부
 };
 
 // ✅ 페이지네이션 정보 추가
@@ -52,6 +53,7 @@ export type NoticeDetail = {
   app_views?: number;
   views?: number;
   is_scraped?: boolean;
+  is_pinned?: boolean; // [추가] 필독 공지 여부
   summary?: string | null;
   is_image_only?: boolean;
   is_image_heavy?: boolean;

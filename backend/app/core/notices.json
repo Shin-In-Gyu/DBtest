@@ -1,30 +1,4 @@
 {
-  "event_internal": {
-    "name": "교내행사",
-    "domain": "https://web.kangnam.ac.kr",
-    "menu_id": "e4058249224f49ab163131ce104214fb",
-    "seq": "119",
-    "type": "main_cms"
-  },
-  "event_external": {
-    "name": "교외행사",
-    "domain": "https://web.kangnam.ac.kr",
-    "menu_id": "e4058249224f49ab163131ce104214fb",
-    "seq": "8481",
-    "type": "main_cms"
-  },
-  "library": {
-    "name": "도서관",
-    "type": "library",
-    "domain": "https://lib.kangnam.ac.kr",
-    "url_path": "/Board?n=notice"
-  },
-  "daeple": {
-    "name": "취창업(대플)",
-    "type": "daeple",
-    "domain": "https://career.kangnam.ac.kr",
-    "url_path": "/user/Bd/BdCm010L.do?BD_NO=1&CURRENT_MENU_CODE=MENU0067&TOP_MENU_CODE=MENU0067"
-  },
   "academic": {
     "name": "학사",
     "domain": "https://web.kangnam.ac.kr",
@@ -48,6 +22,20 @@
     "domain": "https://web.kangnam.ac.kr",
     "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
     "seq": 344
+  },
+  "event_internal": {
+    "name": "교내행사",
+    "domain": "https://web.kangnam.ac.kr",
+    "menu_id": "e4058249224f49ab163131ce104214fb",
+    "seq": "119",
+    "type": "main_cms"
+  },
+  "event_external": {
+    "name": "교외행사",
+    "domain": "https://web.kangnam.ac.kr",
+    "menu_id": "e4058249224f49ab163131ce104214fb",
+    "seq": "8481",
+    "type": "main_cms"
   },
   "dls": {
     "name": "자유전공학부",

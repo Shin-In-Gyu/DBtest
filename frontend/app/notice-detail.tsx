@@ -13,11 +13,11 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  StatusBar,
 } from "react-native";
 // [개선] 기기별 세이프 에어리어 수치를 직접 가져오기 위해 필수
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";

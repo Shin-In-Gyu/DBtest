@@ -3,12 +3,13 @@ import json
 import html as html_lib
 import asyncio
 import re
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Union, cast
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from bs4 import BeautifulSoup, Tag
+from urllib.parse import urljoin, urlparse, parse_qsl, urlencode
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from urllib.parse import urljoin, urlparse, parse_qsl, urlencode
+
 from app.services.ai_service import generate_summary
 from app.core.config import get_urls, NOTICE_CONFIGS
 from app.core.http import fetch_html
@@ -27,17 +28,14 @@ async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
         return
 
     site_type = config.get("type", "main_cms") 
-
-    candidates_map = {}
+    candidates_map: Dict[str, Dict[str, Any]] = {} # [수정] 구조 변경: {url: {"title": str, "is_pinned": bool}}
     
-    if site_type == "library":
-        # candidates_map = await _crawl_library_list(category, config)
-        pass
-    elif site_type == "daeple":  # [Fix] 대플(취창업) 함수 연결
-        # candidates_map = await _crawl_daeple_list(category, config)
-        pass
-    else:
-        candidates_map = await _crawl_main_cms_list(category)
+    # if site_type == "library":
+    #     candidates_map = await _crawl_library_list(category, config)
+    # elif site_type == "daeple":
+    #     candidates_map = await _crawl_daeple_list(category, config)
+    # else:
+    candidates_map = await _crawl_main_cms_list(category)
 
     if not candidates_map:
         logger.info(f"ℹ️ [{category}] 신규 공지사항 없음 (또는 목록 파싱 실패)")
@@ -46,232 +44,208 @@ async def crawl_and_sync_notices(db: AsyncSession, category: str = "univ"):
     await _process_candidates(db, category, candidates_map)
 
 
-async def _crawl_main_cms_list(category: str):
+async def _crawl_main_cms_list(category: str) -> Dict[str, Dict[str, Any]]:
     list_url, info_url, default_seq = get_urls(category)
     if not list_url: return {}
 
     logger.info(f"🔄 [{category}] CMS 목록 가져오는 중...")
     try:
-        params = {"searchMenuSeq": default_seq} if default_seq else {}
         html_text = await fetch_html(list_url, params={"searchMenuSeq": default_seq})
         soup = BeautifulSoup(html_text, "html.parser")
     except Exception as e:
         logger.error(f"❌ [{category}] 목록 접속 실패: {e}")
         return {}
+    # 공지사항 링크들을 먼저 찾습니다.
+    rows = soup.select("div.tbody > ul")
+    candidates: Dict[str, Dict[str, Any]] = {}
 
-    items = soup.select("a.detailLink[data-params]")
-    candidates = {}
-
-    for a in items:
+    for ul in rows:
         try:
-            # [Fix] Pylance Error: 'strip' unknown for AttributeValueList
-            # 1. 텍스트 추출
+            # 1. 해당 행(ul) 안에 상세 페이지 링크(a.detailLink)가 있는지 확인
+            a = ul.select_one("a.detailLink[data-params]")
+            if not a:
+                continue
+
+            # 2. 제목 추출 (a 태그의 텍스트 또는 title 속성) - 필독 감지 전에 먼저 추출
             text_title = a.get_text(" ", strip=True)
-            
-            # 2. title 속성 안전하게 추출 (List | str | None 대응)
-            attr_title_val = a.get("title", "")
-            if isinstance(attr_title_val, list):
-                attr_title_val = " ".join(attr_title_val)
-            elif attr_title_val is None:
-                attr_title_val = ""
-            
-            final_attr_title = str(attr_title_val).strip()
-            
-            # 3. 최종 제목 결정
-            list_title = text_title or final_attr_title
-            
-            # [Fix] Pylance Error: get() returns str | list | None 대응
-            raw_params_val = a.get("data-params", "")
-            if isinstance(raw_params_val, list):
-                raw_params_val = "".join(raw_params_val)
-            elif raw_params_val is None:
-                raw_params_val = ""
-            
-            raw_params = html_lib.unescape(str(raw_params_val)).strip()
-            
-            try: params = json.loads(raw_params)
-            except: 
-                try: params = json.loads(raw_params.replace("'", '"'))
-                except: continue 
+            attr_title = a.get("title", "")
+            final_title = text_title or (attr_title if isinstance(attr_title, str) else "")
 
-            if not (params.get("encMenuSeq") and params.get("encMenuBoardSeq")): continue
+            # 3. [필독 감지] 해당 행(ul) 내부의 모든 li 요소를 확인하여 span.ali_a 태그 찾기
+            is_pinned = False
+            
+            # 방법 1: ul 내부의 모든 span.ali_a 검색 (가장 정확한 방법)
+            pin_elements = ul.select("span.ali_a")
+            for pin_elem in pin_elements:
+                pin_text = pin_elem.get_text(strip=True)
+                if "필독" in pin_text:
+                    is_pinned = True
+                    break
+            
+            # 방법 2: 첫 번째 li 요소 확인 (li.first 또는 li:first-child)
+            if not is_pinned:
+                first_li = ul.select_one("li.first, li:first-child")
+                if first_li:
+                    # 첫 번째 li 내부의 span.ali_a 확인 (가장 정확)
+                    ali_a = first_li.select_one("span.ali_a")
+                    if ali_a:
+                        ali_a_text = ali_a.get_text(strip=True)
+                        if "필독" in ali_a_text:
+                            is_pinned = True
+                    # span.ali_a가 없으면 첫 번째 li 전체 텍스트 확인
+                    if not is_pinned:
+                        first_li_text = first_li.get_text(strip=True)
+                        if "필독" in first_li_text:
+                            is_pinned = True
+            
+            # 방법 3: ul 전체에서 "필독" 검색 (최후의 수단)
+            if not is_pinned:
+                ul_text = ul.get_text(strip=True)
+                if "필독" in ul_text:
+                    # 첫 번째 li에 "필독"이 있는지 확인
+                    first_li = ul.select_one("li:first-child")
+                    if first_li and "필독" in first_li.get_text(strip=True):
+                        is_pinned = True
+            
+            # 4. 데이터 파라미터 파싱
+            raw_params = a.get("data-params", "")
+            if not raw_params: continue
+            
+            # 타입 안전성을 위해 문자열로 변환 (BeautifulSoup의 _AttributeValue 타입 처리)
+            raw_params_str: str = str(raw_params)
+            if not raw_params_str: continue
+            
+            # JSON 파싱 (홑따옴표 처리 포함)
+            try:
+                params = json.loads(raw_params_str)
+            except:
+                params = json.loads(raw_params_str.replace("'", '"'))
 
+            if not (params.get("encMenuSeq") and params.get("encMenuBoardSeq")):
+                continue
+
+            # 5. 최종 상세 URL 생성
             detail_url = (
                 f"{info_url}"
                 f"?scrtWrtYn={'true' if params.get('scrtWrtYn') else 'false'}"
                 f"&encMenuSeq={params.get('encMenuSeq')}"
                 f"&encMenuBoardSeq={params.get('encMenuBoardSeq')}"
             )
-            candidates[detail_url] = list_title
-        except: continue
-    
-    return candidates
-
-
-# --------------------------------------------------------------------------
-# [Logic B] 도서관 (lib.kangnam.ac.kr) 목록 파싱
-# --------------------------------------------------------------------------
-async def _crawl_library_list(category: str, config: dict):
-    domain = str(config.get("domain", ""))
-    endpoint = str(config.get("url_path", "/Board?n=notice"))
-    full_url = urljoin(domain, endpoint)
-
-    logger.info(f"🔄 [{category}] 도서관 목록 가져오는 중... ({full_url})")
-    try:
-        html_text = await fetch_html(full_url)
-        soup = BeautifulSoup(html_text, "html.parser")
-    except Exception as e:
-        logger.error(f"❌ [{category}] 도서관 접속 실패: {e}")
-        return {}
-
-    candidates = {}
-    
-    items = soup.select("dl.onroad-board dd")
-    
-    if not items:
-        items = soup.select("a[href*='Board/Detail']")
-
-    if not items:
-        logger.warning(f"⚠️ [{category}] 목록 요소를 찾을 수 없습니다.")
-        return {}
-
-    for item in items:
-        try:
-            a_tag = item.find("a") if item.name == "dd" else item
-            if not a_tag: continue
-
-            link_href = a_tag.get("href")
-            if not isinstance(link_href, str):
-                continue
-
-            if "n=notice" not in link_href:
-                continue
             
-            import copy
-            a_clone = copy.copy(a_tag)
-            for tag in a_clone.select("span, i, em"):
-                tag.decompose()
+            # 기존에 같은 URL이 있으면 is_pinned 값 유지 (필독이 우선)
+            if detail_url in candidates:
+                existing_is_pinned = candidates[detail_url].get("is_pinned", False)
+                is_pinned = existing_is_pinned or is_pinned
             
-            title = a_clone.get_text(" ", strip=True)
-
-            if not title or len(title) < 2: 
-                continue
-
-            full_detail_url = urljoin(str(domain), link_href)
-            candidates[full_detail_url] = title
+            candidates[detail_url] = {"title": final_title.strip(), "is_pinned": is_pinned}
             
-        except Exception:
-            continue
-
-    return candidates
-# --------------------------------------------------------------------------
-# [Logic C] 대플 (취창업) 목록 파싱 (Javascript fnDetail 해석)
-# --------------------------------------------------------------------------
-# [Logic C] 대플 (취창업) 목록 파싱 (Javascript fnDetail 해석 - 최종 수정판)
-from urllib.parse import urlparse, parse_qsl, urlencode # 상단 import에 추가 필요
-
-async def _crawl_daeple_list(category: str, config: dict):
-    list_url, info_base_url, _ = get_urls(category)
-    if not list_url: return {}
-
-    logger.info(f"🔄 [{category}] 대플 목록 가져오는 중... ({list_url})")
-    try:
-        html_text = await fetch_html(list_url)
-        soup = BeautifulSoup(html_text, "html.parser")
-    except Exception as e:
-        logger.error(f"❌ [{category}] 대플 접속 실패: {e}")
-        return {}
-
-    candidates = {}
-    
-    # [1] 목록 URL에서 필수 파라미터(메뉴코드 등) 추출
-    # 예: CURRENT_MENU_CODE=MENU0067&TOP_MENU_CODE=MENU0067&BD_NO=1
-    parsed_list_url = urlparse(list_url)
-    base_query_params = dict(parse_qsl(parsed_list_url.query))
-    
-    # [2] 행(Row) 찾기
-    rows = soup.select(".bbsBoard tbody tr")
-    if not rows: rows = soup.select("table tbody tr")
-    if not rows: rows = soup.select("table tr")
-        
-    logger.info(f"🔍 [{category}] 감지된 행 개수: {len(rows)}")
-
-    for i, row in enumerate(rows):
-        try:
-            # 제목 셀 찾기 (th 또는 td)
-            title_cell = (
-                row.select_one("th.ellipsis") or 
-                row.select_one("td.ellipsis") or 
-                row.select_one("td.subject")
-            )
-            
-            if not title_cell:
-                # 못 찾았으면 a 태그가 있는 첫 번째 셀 시도
-                for cell in row.find_all(['td', 'th']):
-                    if cell.find('a'):
-                        title_cell = cell
-                        break
-            
-            if not title_cell: continue
-            
-            a_tag = title_cell.find("a")
-            if not a_tag: continue
-
-            # 데이터 추출
-            title = a_tag.get_text(" ", strip=True)
-            href = a_tag.get("href") or a_tag.get("onclick") or ""
-            
-            if len(title) < 2: continue
-
-            # [3] 자바스크립트 인자 파싱
-            # fnDetail('3862', '', '109414', '1') -> [3862, '', 109414, 1]
-            args = re.findall(r"['\"]([^'\"]*)['\"]", str(href))
-            
-            if len(args) >= 3:
-                ntt_sn = args[0]  # 3862
-                bbs_id = args[2]  # 109414
-                
-                # [4] URL 조립 (필수 파라미터 병합)
-                # 기존 q_bbsId -> bbsId 로 변경 (404 해결 시도)
-                detail_params = {
-                    "bbsId": bbs_id,
-                    "nttSn": ntt_sn,
-                    **base_query_params # 리스트의 메뉴 코드 등을 그대로 상속
-                }
-                
-                # 쿼리스트링 생성
-                query_string = urlencode(detail_params)
-                full_detail_url = f"{info_base_url}?{query_string}"
-                
-                candidates[full_detail_url] = title
-            else:
-                if i < 3: 
-                    logger.warning(f"⚠️ [daeple] 링크 파싱 실패 (Row {i}): {href}")
-
         except Exception as e:
-            logger.error(f"❌ [daeple] Row {i} 처리 중 에러: {e}")
+            logger.debug(f"Row parsing error: {e}")
             continue
-
-    if candidates:
-        logger.info(f"✅ [{category}] 유효 공지 {len(candidates)}개 식별됨")
-    else:
-        logger.warning(f"⚠️ [{category}] 행은 찾았으나 유효한 공지 링크를 추출하지 못했습니다.")
-        
+    
     return candidates
 
-async def _process_candidates(db: AsyncSession, category: str, candidates_map: dict):
+
+# async def _crawl_library_list(category: str, config: dict) -> Dict[str, Dict[str, Any]]:
+#     domain = str(config.get("domain", ""))
+#     endpoint = str(config.get("url_path", "/Board?n=notice"))
+#     full_url = urljoin(domain, endpoint)
+
+#     try:
+#         html_text = await fetch_html(full_url)
+#         soup = BeautifulSoup(html_text, "html.parser")
+#     except Exception as e:
+#         logger.error(f"❌ [{category}] 도서관 접속 실패: {e}")
+#         return {}
+
+#     candidates: Dict[str, Dict[str, Any]] = {}
+#     items = soup.select("dl.onroad-board dd") or soup.select("a[href*='Board/Detail']")
+
+#     for item in items:
+#         try:
+#             a_tag = item.find("a") if item.name == "dd" else item
+#             if not isinstance(a_tag, Tag): continue
+
+#             link_href = a_tag.get("href")
+#             if not isinstance(link_href, str) or "n=notice" not in link_href: continue
+            
+#             # 도서관의 경우 보통 'notice' 아이콘이나 텍스트로 구분
+#             is_pinned = "공지" in item.get_text() or "notice" in str(item.get("class", ""))
+
+#             import copy
+#             a_clone = copy.copy(a_tag)
+#             for tag in a_clone.select("span, i, em"): tag.decompose()
+#             title = a_clone.get_text(" ", strip=True)
+
+#             if not title or len(title) < 2: continue
+
+#             full_detail_url = urljoin(domain, link_href)
+#             candidates[full_detail_url] = {"title": title, "is_pinned": is_pinned}
+#         except: continue
+
+#     return candidates
+
+
+# async def _crawl_daeple_list(category: str, config: dict) -> Dict[str, Dict[str, Any]]:
+#     list_url, info_base_url, _ = get_urls(category)
+#     if not list_url: return {}
+
+#     try:
+#         html_text = await fetch_html(list_url)
+#         soup = BeautifulSoup(html_text, "html.parser")
+#     except Exception as e:
+#         logger.error(f"❌ [{category}] 대플 접속 실패: {e}")
+#         return {}
+
+#     candidates: Dict[str, Dict[str, Any]] = {}
+#     parsed_list_url = urlparse(list_url)
+#     base_query_params = dict(parse_qsl(parsed_list_url.query))
+    
+#     rows = soup.select(".bbsBoard tbody tr") or soup.select("table tbody tr")
+
+#     for i, row in enumerate(rows):
+#         try:
+#             # [필독 감지] 대플은 보통 첫 번째 td에 '공지' 이미지가 있음
+#             is_pinned = False
+#             first_td = row.select_one("td")
+#             if first_td and (first_td.select_one("img") or "공지" in first_td.get_text()):
+#                 is_pinned = True
+
+#             title_cell = row.select_one(".ellipsis, .subject") or row.find('a').parent
+#             a_tag = title_cell.find("a") if title_cell else None
+#             if not isinstance(a_tag, Tag): continue
+
+#             title = a_tag.get_text(" ", strip=True)
+#             href = str(a_tag.get("href") or a_tag.get("onclick") or "")
+#             if len(title) < 2: continue
+
+#             args = re.findall(r"['\"]([^'\"]*)['\"]", href)
+#             if len(args) >= 3:
+#                 detail_params = {
+#                     "bbsId": args[2],
+#                     "nttSn": args[0],
+#                     **base_query_params
+#                 }
+#                 full_detail_url = f"{info_base_url}?{urlencode(detail_params)}"
+#                 candidates[full_detail_url] = {"title": title, "is_pinned": is_pinned}
+
+#         except Exception as e:
+#             logger.debug(f"Row {i} skip: {e}")
+#             continue
+        
+#     return candidates
+
+
+async def _process_candidates(db: AsyncSession, category: str, candidates_map: Dict[str, Dict[str, Any]]):
     candidate_urls = list(candidates_map.keys())
     if not candidate_urls: return
 
     try:
-        stmt = select(Notice.link).where(
-            and_(
-                Notice.category == category,
-                Notice.link.in_(candidate_urls)
-            )
-        )
+        # 기존 공지사항 조회 (링크와 is_pinned 정보 포함)
+        stmt = select(Notice).where(and_(Notice.category == category, Notice.link.in_(candidate_urls)))
         result = await db.execute(stmt)
-        existing_links = set(result.scalars().all())
+        existing_notices = {notice.link: notice for notice in result.scalars().all()}
+        existing_links = set(existing_notices.keys())
     except Exception as e:
         logger.error(f"🔥 [{category}] DB 조회 실패: {e}")
         return
@@ -279,40 +253,106 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
     tasks = []      
     meta_info = []  
     processed_in_this_run = set()
+    pinned_count = 0  # 필독 공지 카운트
 
-    for url, title in candidates_map.items():
-        if url in existing_links: continue
-        if url in processed_in_this_run: continue
+    # 기존 공지사항의 필독 상태 업데이트
+    updated_count = 0
+    for url, data in candidates_map.items():
+        if url in existing_notices:
+            existing_notice = existing_notices[url]
+            new_is_pinned = data["is_pinned"]
+            old_is_pinned = existing_notice.is_pinned
+            if old_is_pinned != new_is_pinned:
+                existing_notice.is_pinned = new_is_pinned
+                updated_count += 1
+        if data["is_pinned"]:
+            pinned_count += 1
+
+    # 신규 공지사항 처리
+    for url, data in candidates_map.items():
+        if url in existing_links or url in processed_in_this_run: continue
         processed_in_this_run.add(url)
-
+        is_pinned_flag = data.get("is_pinned", False)
         tasks.append(safe_scrape_with_semaphore(url))
-        meta_info.append({"list_title": title, "detail_url": url, "category": category})
+        meta_info.append({"list_title": data.get("title", ""), "is_pinned": bool(is_pinned_flag), "detail_url": url, "category": category})
+    
+    if updated_count > 0:
+        try:
+            await db.commit()
+            logger.info(f"✅ [{category}] 기존 공지 {updated_count}개 필독 상태 업데이트 완료")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"🔥 [{category}] 필독 상태 업데이트 실패: {e}")
+    
+    if pinned_count > 0:
+        logger.info(f"📌 [{category}] 총 {pinned_count}개 필독 공지 감지됨")
 
-    if not tasks:
-        return
+    # [추가] 크롤링 목록에 없는 필독 공지 자동 해제 (시간이 지나 목록에서 사라진 필독 공지 처리)
+    try:
+        crawled_urls = set(candidates_map.keys())
+        
+        # 방법 1: 크롤링 목록에 없는 필독 공지 해제
+        stmt_old_pinned = select(Notice).where(
+            Notice.category == category,
+            Notice.is_pinned == True,
+            Notice.link.not_in(crawled_urls) if crawled_urls else Notice.link != ""
+        )
+        result_old_pinned = await db.execute(stmt_old_pinned)
+        old_pinned_notices = result_old_pinned.scalars().all()
+        
+        unpinned_count = 0
+        for notice in old_pinned_notices:
+            notice.is_pinned = False
+            unpinned_count += 1
+            logger.info(f"📌→📄 [{category}] 필독 해제: {notice.title[:50]}...")
+        
+        # 방법 2: 안전장치 - 30일 이상 된 필독 공지 자동 해제
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
+        stmt_expired = select(Notice).where(
+            Notice.category == category,
+            Notice.is_pinned == True,
+            Notice.crawled_at < cutoff_date
+        )
+        result_expired = await db.execute(stmt_expired)
+        expired_notices = result_expired.scalars().all()
+        
+        expired_count = 0
+        for notice in expired_notices:
+            if notice not in old_pinned_notices:  # 중복 방지
+                notice.is_pinned = False
+                expired_count += 1
+                logger.info(f"⏰ [{category}] 오래된 필독 자동 해제 (30일+): {notice.title[:50]}...")
+        
+        total_unpinned = unpinned_count + expired_count
+        if total_unpinned > 0:
+            await db.commit()
+            logger.info(f"✅ [{category}] {total_unpinned}개 필독 공지 자동 해제 완료 (목록 밖: {unpinned_count}, 기한 만료: {expired_count})")
+    except Exception as e:
+        logger.error(f"⚠️ [{category}] 필독 자동 해제 실패: {e}")
+        # 실패해도 크롤링은 계속 진행
+
+    if not tasks: return
 
     logger.info(f"🚀 [{category}] {len(tasks)}개 신규 상세 수집 시작")
-
     results = await asyncio.gather(*tasks, return_exceptions=True)
     new_notices_buffer = [] 
     
     for i, result in enumerate(results):
-        # [수정] Exception 타입 체크 강화
-        if isinstance(result, Exception) or not result:
-            logger.warning(f"⚠️ 상세 파싱 실패: {meta_info[i]['detail_url']} | 사유: {result}")
+        if isinstance(result, Exception) or not result: 
             continue
         
+        if i >= len(meta_info):
+            logger.error(f"🔥 [{category}] 인덱스 불일치: result 인덱스 {i} >= meta_info 길이 {len(meta_info)}")
+            continue
+            
         scraped_data = cast(Dict[str, Any], result)
         meta = meta_info[i]
         
-        # [보완] 제목이 크롤링 데이터에 없으면 목록 제목 사용 (Pylance safe)
-        scraped_title = scraped_data.get("title")
-        final_title = str(scraped_title) if scraped_title else meta["list_title"]
-        
-        # [보완] 리스트 형태의 데이터 안전하게 조인
+        final_title = str(scraped_data.get("title") or meta["list_title"])
         content_lines = scraped_data.get("texts", [])
         final_content = "\n\n".join(content_lines) if isinstance(content_lines, list) else ""
-
+        is_pinned_value = meta.get("is_pinned", False)
+        
         new_notice = Notice(
             title=final_title,
             link=meta["detail_url"],
@@ -322,32 +362,60 @@ async def _process_candidates(db: AsyncSession, category: str, candidates_map: d
             files=scraped_data.get("files", []),
             category=meta["category"],
             univ_views=scraped_data.get("univ_views", 0),
-            app_views=0
+            app_views=0,
+            is_pinned=is_pinned_value # [추가] 필독 여부 저장
         )
+        
+        if is_pinned_value:
+            logger.info(f"📌 [{category}] 필독 공지 저장: {final_title[:60]}...")
+        
         db.add(new_notice)
         new_notices_buffer.append(new_notice)
+
     if new_notices_buffer:
         try:
             await db.commit()
             logger.info(f"✅ [{category}] {len(new_notices_buffer)}개 저장 완료")
             
             if category in NOTIFICATION_TARGET_CATEGORIES:
-                try:
-                    await send_keyword_notifications(db, new_notices_buffer)
-                except Exception as ne:
-                    logger.error(f"⚠️ 알림 발송 중 오류: {ne}")
-                    
+                await send_keyword_notifications(db, new_notices_buffer)
         except Exception as e:
             await db.rollback()
-            if "UNIQUE constraint" in str(e):
-                logger.warning(f"⚠️ [{category}] 중복 데이터 무시됨")
-            else:
-                logger.error(f"🔥 DB 커밋 실패: {e}")
+            logger.error(f"🔥 DB 커밋 실패: {e}")
+
 
 async def safe_scrape_with_semaphore(url: str):
     async with SCRAPE_SEMAPHORE:
         await asyncio.sleep(0.5) 
         return await scrape_notice_content(url)
+
+
+async def search_notices(
+    db: AsyncSession, 
+    category: str, 
+    query: Optional[str] = None, 
+    skip: int = 0, 
+    limit: int = 20, 
+    sort_by: str = "date"
+):
+    """공지사항 검색 및 조회 (API용) - 필독 우선 정렬 적용"""
+    stmt = select(Notice)
+    if category != "all":
+        stmt = stmt.where(Notice.category == category)
+    if query:
+        stmt = stmt.where(Notice.title.like(f"%{query}%"))
+    
+    # [수정] 1순위: 필독(is_pinned), 2순위: 날짜(date), 3순위: ID
+    if sort_by == "views":
+        stmt = stmt.order_by(Notice.is_pinned.desc(), Notice.univ_views.desc())
+    else:
+        stmt = stmt.order_by(Notice.is_pinned.desc(), Notice.date.desc().nulls_last(), Notice.id.desc())
+        
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+# ... (기존 get_or_create_summary 함수 유지)
 
 async def get_or_create_summary(db: AsyncSession, notice_id: int) -> str:
     stmt = select(Notice).where(Notice.id == notice_id)
@@ -382,25 +450,3 @@ async def get_or_create_summary(db: AsyncSession, notice_id: int) -> str:
     notice.summary = summary
     await db.commit()
     return summary
-
-async def search_notices(
-    db: AsyncSession, 
-    category: str, 
-    query: Optional[str] = None, 
-    skip: int = 0, 
-    limit: int = 20, 
-    sort_by: str = "date"
-):
-    """공지사항 검색 및 조회 (API용)"""
-    stmt = select(Notice)
-    if category != "all":
-        stmt = stmt.where(Notice.category == category)
-    if query:
-        stmt = stmt.where(Notice.title.like(f"%{query}%"))  
-    if sort_by == "views":
-        stmt = stmt.order_by(Notice.univ_views.desc())
-    else:
-        stmt = stmt.order_by(Notice.date.desc().nulls_last(), Notice.id.desc())
-    stmt = stmt.offset(skip).limit(limit)
-    result = await db.execute(stmt)
-    return result.scalars().all()

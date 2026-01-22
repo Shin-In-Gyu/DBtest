@@ -59,6 +59,7 @@ type RawNotice = {
   app_views?: number;
   views?: number;
   is_scraped?: boolean;
+  is_pinned?: boolean; // [추가] 필독 공지 여부
 };
 
 type BackendNoticeListResponse = {
@@ -103,6 +104,7 @@ export async function getKnuNotices(params: {
     app_views: r.app_views,
     views: r.views ?? r.univ_views ?? r.app_views,
     is_scraped: r.is_scraped,
+    is_pinned: r.is_pinned, // [추가] 필독 공지 여부
   }));
 
   const obj = Array.isArray(raw) ? null : raw;
@@ -188,6 +190,16 @@ export async function generateNoticeSummary(
 }
 
 // ============================================================
+// 구독 목록 조회 (서버에 저장된 카테고리)
+// ============================================================
+export async function getSubscriptions(
+  token: string
+): Promise<{ categories: string[] }> {
+  const url = buildUrl("/device/subscriptions", { token });
+  return safeFetch(url);
+}
+
+// ============================================================
 // 구독 설정 업데이트
 // ============================================================
 export async function updateSubscriptions(
@@ -262,6 +274,7 @@ export async function getMyScraps(
     app_views: r.app_views,
     views: r.views ?? r.univ_views ?? r.app_views,
     is_scraped: true,
+    is_pinned: r.is_pinned, // [추가] 필독 공지 여부
   }));
 
   return {
@@ -311,6 +324,7 @@ export async function advancedSearch(
     app_views: r.app_views,
     views: r.views ?? r.univ_views ?? r.app_views,
     is_scraped: r.is_scraped,
+    is_pinned: r.is_pinned, // [추가] 필독 공지 여부
   }));
 
   return {

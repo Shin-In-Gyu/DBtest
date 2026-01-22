@@ -6,21 +6,31 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const DEPT_STORAGE_KEY = "@knu_selected_dept_v1";
+const DEPT_STORAGE_KEY_V2 = "@knu_selected_depts_v2";
 
 export default function DeptSelectScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ selectedId?: string }>();
-  const selectedId = params.selectedId || null;
+  const params = useLocalSearchParams<{ selectedIds?: string }>();
+  
+  // 기존 선택된 학과 목록 파싱
+  const selectedIds = useMemo(() => {
+    try {
+      if (params.selectedIds) {
+        const parsed = JSON.parse(params.selectedIds);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch {}
+    return [];
+  }, [params.selectedIds]);
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -44,9 +54,23 @@ export default function DeptSelectScreen() {
   }, [allDepts, searchQuery]);
 
   const handleSelect = async (id: string) => {
-    // 선택된 학과 ID를 AsyncStorage에 저장
-    await AsyncStorage.setItem(DEPT_STORAGE_KEY, id);
-    router.back();
+    try {
+      // 이미 선택된 학과인지 확인
+      if (selectedIds.includes(id)) {
+        // 이미 선택된 학과면 그대로 돌아가기
+        router.back();
+        return;
+      }
+
+      // 새로운 학과를 배열에 추가
+      const updatedIds = [...selectedIds, id];
+      
+      // AsyncStorage에 저장
+      await AsyncStorage.setItem(DEPT_STORAGE_KEY_V2, JSON.stringify(updatedIds));
+      router.back();
+    } catch (error) {
+      console.error("학과 선택 저장 실패:", error);
+    }
   };
 
   return (
@@ -85,20 +109,20 @@ export default function DeptSelectScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={s.list}
             renderItem={({ item }) => {
-              const active = item.id === selectedId;
+              const isSelected = selectedIds.includes(item.id);
               return (
                 <Pressable
                   onPress={() => handleSelect(item.id)}
                   style={({ pressed }) => [
                     s.item,
-                    active && s.itemActive,
+                    isSelected && s.itemActive,
                     pressed && { opacity: 0.85 },
                   ]}
                 >
-                  <Text style={[s.itemText, active && s.itemTextActive]}>
+                  <Text style={[s.itemText, isSelected && s.itemTextActive]}>
                     {item.label}
                   </Text>
-                  {active && (
+                  {isSelected && (
                     <Ionicons name="checkmark-circle" size={20} color={colors.KNU} />
                   )}
                 </Pressable>

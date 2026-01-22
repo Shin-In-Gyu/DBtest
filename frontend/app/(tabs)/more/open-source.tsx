@@ -186,7 +186,7 @@ export default function OpenSourceScreen() {
           <Ionicons name="arrow-back-outline" size={24} color="#111" />
         </Pressable>
         <Text style={styles.headerTitle}>사용된 오픈소스</Text>
-        <View style={styles.backButton} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -222,6 +222,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },
+  headerSpacer: {
+    width: 40,
+    height: 40,
+  },
   backButton: {
     width: 40,
     height: 40,
@@ -229,9 +233,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: "700",
     color: "#111",
+    textAlign: "center",
   },
   container: {
     flex: 1,

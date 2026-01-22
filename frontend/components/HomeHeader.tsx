@@ -12,7 +12,7 @@ export default function HomeHeader() {
       <View style={styles.inner}>
         {/* 왼쪽: 앱 이름 */}
         <Text style={styles.title} numberOfLines={1}>
-          KNU 공지
+          강남대 알림이
         </Text>
 
         {/* 오른쪽: 검색 + 알림 */}

@@ -12,6 +12,7 @@ class NoticeBase(BaseModel):
     author: Optional[str] = None
     univ_views: int = 0
     app_views: int = 0
+    is_pinned: bool = False
     
     @computed_field
     @property

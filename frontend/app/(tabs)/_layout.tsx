@@ -1,4 +1,5 @@
 import HomeHeader from "@/components/HomeHeader";
+import MoreTabHeader from "@/components/MoreTabHeader";
 import OtherHeader from "@/components/OtherHeader";
 import { colors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -74,7 +75,7 @@ export default function TabLayout() {
         options={{
           title: "더보기",
           headerShown: true,
-          header: () => <OtherHeader title="더보기" />,
+          header: () => <MoreTabHeader />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "ellipsis-horizontal" : "ellipsis-horizontal-outline"}

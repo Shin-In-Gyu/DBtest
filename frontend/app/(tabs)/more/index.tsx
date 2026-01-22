@@ -24,6 +24,7 @@ const EXPO_PUSH_TEST_URL = "https://expo.dev/notifications";
 const PRIVACY_POLICY_URL = "https://troubled-buffet-fd9.notion.site/2ef8cd322ea380b2a2d8e306c410c52b?source=copy_link";
 const TERMS_OF_SERVICE_URL = "https://troubled-buffet-fd9.notion.site/2ef8cd322ea380fbac20cfa69e0450d1?source=copy_link";
 const APP_INTRO_URL = "https://troubled-buffet-fd9.notion.site/2ef8cd322ea38076bf76f192daeb78be?source=copy_link";
+const NEW_CONTENT_URL = "https://troubled-buffet-fd9.notion.site/2f08cd322ea380069501dd327cf569ab?source=copy_link";
 
 interface MenuItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -164,7 +165,7 @@ export default function MoreScreen() {
           icon="notifications-outline"
           label="알림 설정"
           onPress={() => {
-            // TODO: 알림 설정 페이지로 이동
+            router.push("/notifications");
           }}
         />
 
@@ -176,7 +177,10 @@ export default function MoreScreen() {
           icon="star-outline"
           label="새로운 내용"
           onPress={() => {
-            // TODO: 새로운 내용 페이지로 이동
+            Linking.openURL(NEW_CONTENT_URL).catch((err) => {
+              console.error("Failed to open new content:", err);
+              Alert.alert("오류", "링크를 열 수 없습니다.");
+            });
           }}
         />
         <MenuItem
@@ -224,7 +228,7 @@ export default function MoreScreen() {
           icon="folder-outline"
           label="사용된 오픈소스"
           onPress={() => {
-            router.push("/(tabs)/more/open-source");
+            router.push("./more/open-source");
           }}
         />
         <MenuItem

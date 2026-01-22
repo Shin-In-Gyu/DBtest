@@ -1,11 +1,11 @@
 # app/routers/knu.py
 import json
-from typing import List, Optional
+from typing import List, Optional, cast
 from datetime import date as DateType
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, or_, desc, func
+from sqlalchemy import select, delete, or_, desc, func, and_
 from sqlalchemy.orm import selectinload
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -30,7 +30,6 @@ logger = get_logger()
 limiter = Limiter(key_func=get_remote_address)
 
 # [New] 일반 카테고리 정의 (순서 지정용)
-
 GENERAL_CATEGORIES = ["academic", "scholar", "learning", "job", "event_internal", "event_external"]
 
 # ============================================================
@@ -79,8 +78,8 @@ async def read_notices(
             my_scrap_ids = set(res_scrap.scalars().all())
             
             for notice in results:
-                if notice.id in my_scrap_ids:
-                    notice.is_scraped = True
+                # [수정] Notice 객체의 동적 속성 할당 (NoticeListResponse에서 처리됨)
+                setattr(notice, "is_scraped", notice.id in my_scrap_ids)
 
     return {
         "items": results,
@@ -152,7 +151,7 @@ async def get_notice_detail(
 
     univ_views = scraped_data.get("univ_views", 0)
     app_views = notice_in_db.app_views if notice_in_db else 0
-    
+    # [수정] NoticeDetailResponse 스키마에 맞춰 정확한 타입 가딩 후 반환
     return {
         "id": notice_id if notice_id else 0,
         "title": scraped_data["title"],
@@ -168,6 +167,7 @@ async def get_notice_detail(
         "views": (univ_views or 0) + (app_views or 0),
         "crawled_at": notice_in_db.crawled_at if notice_in_db else None,
         "is_scraped": is_scraped,
+        "is_pinned": scraped_data.get("is_pinned", False), # [추가] 필독 여부 반환
         "summary": notice_in_db.summary if notice_in_db else None
     }
 
@@ -341,13 +341,14 @@ async def update_device_subscriptions(
     if request.categories:
         stmt_keys = select(Keyword).where(Keyword.word.in_(request.categories))
         res_keys = await db.execute(stmt_keys)
-        existing_keywords = res_keys.scalars().all()
+        existing_keywords: List[Keyword] = list(res_keys.scalars().all())
         existing_words = {k.word for k in existing_keywords}
 
-        new_keywords = [
+        new_keywords: List[Keyword] = [
             Keyword(word=cat) for cat in request.categories 
             if cat not in existing_words
         ]
+        all_keywords: List[Keyword]
         if new_keywords:
             db.add_all(new_keywords)
             await db.flush()
@@ -396,11 +397,48 @@ async def get_categories():
     
     # 학과 카테고리: 이름순 정렬
     dept.sort(key=lambda x: x["label"])
-
+    
     return {
         "general": general,
         "dept": dept
     }
+
+# ============================================================
+# 수동 크롤링 실행 (테스트/디버깅용)
+# ============================================================
+@router.post("/admin/crawl")
+async def manual_crawl(
+    category: Optional[str] = Query(None, description="크롤링할 카테고리 (없으면 전체)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """수동으로 크롤링 실행 (필독 감지 테스트용)"""
+    try:
+        categories_to_crawl = [category] if category and category in NOTICE_CONFIGS else list(NOTICE_CONFIGS.keys())
+        
+        results = {}
+        for cat in categories_to_crawl:
+            logger.info(f"🚀 수동 크롤링 시작: {cat}")
+            await knu_notice_service.crawl_and_sync_notices(db, cat)
+            
+            # 필독 공지 개수 확인
+            stmt = select(func.count(Notice.id)).where(
+                and_(Notice.category == cat, Notice.is_pinned == True)
+            )
+            result = await db.execute(stmt)
+            pinned_count = result.scalar() or 0
+            
+            results[cat] = {
+                "status": "success",
+                "pinned_count": pinned_count
+            }
+        
+        return {
+            "message": "크롤링 완료",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"❌ 수동 크롤링 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================
 # 고급 검색 (신규)
@@ -441,7 +479,12 @@ async def advanced_search(
         stmt = stmt.where(Notice.date <= date_to)
     
     # 정렬 및 페이지네이션
-    stmt = stmt.order_by(Notice.date.desc().nulls_last(), Notice.id.desc())
+    # [수정] 고급 검색에서도 필독 공지를 가장 먼저 보여줌
+    stmt = stmt.order_by(
+        Notice.is_pinned.desc(), 
+        Notice.date.desc().nulls_last(), 
+        Notice.id.desc()
+    )
     stmt = stmt.offset((page - 1) * size).limit(size)
     
     result = await db.execute(stmt)
@@ -468,7 +511,7 @@ async def get_statistics(db: AsyncSession = Depends(get_db)):
         select(Notice.category, func.count(Notice.id))
         .group_by(Notice.category)
     )
-    category_stats = dict(category_result.all())
+    category_stats = {str(row[0]): int(row[1]) for row in category_result.all()}
     
     # 오늘 크롤링된 공지 수
     today = datetime.now(timezone.utc).date()

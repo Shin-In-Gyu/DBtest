@@ -1,13 +1,19 @@
 # app/database/models.py
 import json
-from sqlalchemy import Integer, String, Text, DateTime, Date, ForeignKey, Table, Index, UniqueConstraint, Column, Boolean
-from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator
 from datetime import datetime, date as DateType, timezone 
 from typing import List, Optional, Dict, Any
+
+from sqlalchemy import (
+    ForeignKey, Table, Index, UniqueConstraint, Column,
+    Integer, String, Text, Date, Boolean, DateTime
+)
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
+
 from .database import Base
 
 # [유틸리티] JSON 타입 처리기
+
 class JSONEncodedDict(TypeDecorator):
     impl = Text
     cache_ok = True
@@ -35,7 +41,7 @@ device_keywords = Table(
 class Notice(Base):
     __tablename__ = "notices"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String, index=True)
     link: Mapped[str] = mapped_column(String, index=True) 
     date: Mapped[Optional[DateType]] = mapped_column(Date, nullable=True)
@@ -47,12 +53,13 @@ class Notice(Base):
     category: Mapped[str] = mapped_column(String, index=True)
     author: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
-    univ_views: Mapped[int] = mapped_column(Integer, default=0)
-    app_views: Mapped[int] = mapped_column(Integer, default=0)
+    univ_views: Mapped[int] = mapped_column(default=0)
+    app_views: Mapped[int] = mapped_column(default=0)
     
     # [알림 발송 여부]
-    is_notified: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-
+    is_notified: Mapped[bool] = mapped_column(default=False, index=True)
+    # [수정] 필독 공지 여부를 저장하는 필드 추가 (인덱스 추가로 정렬 최적화)
+    is_pinned: Mapped[bool] = mapped_column(default=False, index=True)
     # [크롤링 시간]
     crawled_at: Mapped[datetime] = mapped_column(
         DateTime, 
@@ -76,7 +83,7 @@ class Notice(Base):
 class Keyword(Base):
     __tablename__ = "keywords"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
     word: Mapped[str] = mapped_column(String, unique=True, index=True)
 
     subscribed_devices: Mapped[List["Device"]] = relationship(
@@ -91,7 +98,7 @@ class Keyword(Base):
 class Device(Base):
     __tablename__ = "devices"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
     token: Mapped[str] = mapped_column(String, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
@@ -110,14 +117,12 @@ class Device(Base):
 class Scrap(Base):
     __tablename__ = "scraps"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
     device_id: Mapped[int] = mapped_column(
-        Integer, 
         ForeignKey("devices.id", ondelete="CASCADE"), 
         index=True
     )
     notice_id: Mapped[int] = mapped_column(
-        Integer, 
         ForeignKey("notices.id", ondelete="CASCADE"), 
         index=True
     )
@@ -138,14 +143,12 @@ class Scrap(Base):
 class NotificationHistory(Base):
     __tablename__ = "notification_history"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     device_id: Mapped[int] = mapped_column(
-        Integer, 
         ForeignKey("devices.id", ondelete="CASCADE"),
         index=True
     )
     notice_id: Mapped[int] = mapped_column(
-        Integer, 
         ForeignKey("notices.id", ondelete="CASCADE"),
         index=True
     )
@@ -165,11 +168,11 @@ class NotificationHistory(Base):
 class CrawlFailureLog(Base):
     __tablename__ = "crawl_failures"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     url: Mapped[str] = mapped_column(String, index=True)
     category: Mapped[str] = mapped_column(String, index=True)
     error_message: Mapped[str] = mapped_column(Text)
-    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    retry_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
         default=lambda: datetime.now(timezone.utc),
