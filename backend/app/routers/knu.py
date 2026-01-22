@@ -30,7 +30,8 @@ logger = get_logger()
 limiter = Limiter(key_func=get_remote_address)
 
 # [New] 일반 카테고리 정의 (순서 지정용)
-GENERAL_CATEGORIES = ["academic", "scholar", "learning", "job", "library", "daeple", "charm"]
+
+GENERAL_CATEGORIES = ["academic", "scholar", "learning", "job", "event_internal", "event_external"]
 
 # ============================================================
 # 공지사항 목록 조회 (페이지네이션 개선)

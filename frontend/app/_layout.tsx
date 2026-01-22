@@ -9,6 +9,7 @@ import React, { useEffect } from "react";
 import "react-native-reanimated";
 import { BookmarksProvider } from "./providers/BookmarksProvider";
 import { ReadStatusProvider } from "./providers/ReadStatusProvider";
+import Constants from "expo-constants";
 
 /**
  * 푸시 알림 권한·기기 등록.
@@ -19,7 +20,7 @@ import { ReadStatusProvider } from "./providers/ReadStatusProvider";
  * 1. app.json에 "expo-notifications" 플러그인 추가 후 `expo prebuild` + 네이티브 빌드
  * 2. 아래 ENABLE_PUSH_REGISTRATION 을 true 로 바꾸기
  */
-const ENABLE_PUSH_REGISTRATION = false;
+const ENABLE_PUSH_REGISTRATION = true;
 
 async function registerForPushNotificationsAsync() {
   if (!ENABLE_PUSH_REGISTRATION) return;
@@ -33,8 +34,13 @@ async function registerForPushNotificationsAsync() {
     }
     if (finalStatus !== "granted") return;
 
-    const tokenData = await Notifications.getDevicePushTokenAsync();
+    // [수정] Expo Go 알림 테스트를 위해 ExpoPushToken 사용
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData?.data;
+    
+    console.log("✅ Expo Push Token:", token);
+
     if (!token) return;
 
     await AsyncStorage.setItem("@fcm_token", token);
@@ -47,8 +53,8 @@ async function registerForPushNotificationsAsync() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
     });
-  } catch {
-    // 네이티브 모듈 미지원 환경. 앱 동작에는 영향 없음.
+  } catch (e) {
+    console.log("❌ 알림 등록 실패:", e);
   }
 }
 

@@ -26,6 +26,7 @@ try:
 except FileNotFoundError:
     print(f"⚠️ [Config] 설정 파일 없음: {JSON_PATH}")
 
+
 def get_urls(category: str):
     conf = NOTICE_CONFIGS.get(category)
     if not conf:

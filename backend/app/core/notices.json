@@ -1,10 +1,4 @@
 {
-  "univ": {
-    "name": "전체 공지",
-    "domain": "https://web.kangnam.ac.kr",
-    "menu_id": "f19069e6134f8f8aa7f689a4a675e66f",
-    "seq": 0
-  },
   "event_internal": {
     "name": "교내행사",
     "domain": "https://web.kangnam.ac.kr",

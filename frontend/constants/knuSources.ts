@@ -7,9 +7,10 @@ export const categories = [
   { id: "scholar", label: "장학" },
   { id: "learning", label: "학습/상담" },
   { id: "job", label: "취창업" },
-  { id: "library", label: "도서관" },
-  { id: "daeple", label: "대플" },
-  { id: "charm", label: "참인재" },
+  { id: "event_internal", label: "행사(교내)" },
+  { id: "event_external", label: "행사(교외)" },
+  // { id: "library", label: "도서관" },
+  // { id: "daeple", label: "대플" },
 ] as const;
 
 // 백엔드에서 받은 학과 데이터 타입
@@ -183,9 +184,11 @@ export const category = {
     { id: "scholar", label: "장학", icon: "gift-outline" },
     { id: "learning", label: "학습/상담", icon: "book-outline" },
     { id: "job", label: "취창업", icon: "briefcase-outline" },
-    { id: "library", label: "도서관", icon: "library-outline" },
-    { id: "daeple", label: "대플", icon: "rocket-outline" },
-    { id: "charm", label: "참인재", icon: "ribbon-outline" },
+    //{ id: "library", label: "도서관", icon: "library-outline" },
+    //{ id: "daeple", label: "대플", icon: "rocket-outline" },
+    { id: "event_internal", label: "행사(교내)", icon: "calendar-outline" },
+    { id: "event_external", label: "행사(교외)", icon: "globe-outline" },
+    
   ],
   dept: Object.entries(deptData)
     .sort(([, a], [, b]) => a.seq - b.seq || a.name.localeCompare(b.name))
