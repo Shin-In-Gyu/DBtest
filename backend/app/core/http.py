@@ -1,5 +1,6 @@
 # app/core/http.py
 import httpx
+import os
 from fastapi import HTTPException
 from app.core.logger import get_logger
 
@@ -25,13 +26,20 @@ def get_client() -> httpx.AsyncClient:
         limits = httpx.Limits(max_keepalive_connections=20, max_connections=50)
         timeout = httpx.Timeout(20.0, connect=5.0)
         
+        # SSL 검증 설정 (환경 변수로 제어)
+        ssl_verify = os.getenv("SSL_VERIFY", "False").lower() == "true"
+        
         _global_client = httpx.AsyncClient(
             timeout=timeout,
             limits=limits,
             headers=DEFAULT_HEADERS,
-            verify=False,
+            verify=ssl_verify,
             follow_redirects=True
         )
+        
+        verify_status = "활성화" if ssl_verify else "비활성화"
+        logger.info(f"🔒 SSL 검증: {verify_status}")
+        
     return _global_client
 
 async def close_client():

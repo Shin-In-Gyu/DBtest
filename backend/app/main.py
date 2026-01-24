@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
@@ -23,8 +23,16 @@ from app.core.config import NOTICE_CONFIGS
 from app.database.database import engine, Base, AsyncSessionLocal, init_db
 from app.core.logger import get_logger
 from app.core.http import close_client, get_client
+from app.core.env_validator import validate_environment
 from app.services import knu_notice_service, notification_service
 from app.routers import knu, health
+
+# 환경 변수 검증 (서버 시작 전 실행)
+try:
+    validate_environment()
+except Exception as e:
+    print(f"\n❌ 환경 변수 검증 실패: {e}\n")
+    sys.exit(1)
 
 logger = get_logger()
 scheduler = AsyncIOScheduler()
@@ -67,10 +75,14 @@ async def initial_crawl():
 async def lifespan(app: FastAPI):
     # ---------------- [시작 시점] ----------------
     await init_db()
+    
+    # HTTP 클라이언트 초기화
     try:
         get_client()
-    except: 
-        pass
+        logger.info("✅ HTTP Client 초기화 완료")
+    except Exception as e:
+        logger.error(f"❌ HTTP Client 초기화 실패: {e}")
+        raise
     
     logger.info("⚡ API Server Started! (Kangrimi Backend)")
     
@@ -106,7 +118,14 @@ app = FastAPI(lifespan=lifespan, title="K-Now API", version="2.6")
 
 # [Rate Limiter 등록]
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# [Rate Limit 예외 핸들러]
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": "너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요."}
+    )
 
 # [라우터 등록]
 app.include_router(health.router, prefix="/api", tags=["Health"])  # 헬스체크

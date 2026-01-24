@@ -99,7 +99,7 @@ function NoticeCard({
       <View style={s.titleRow}>
         {item.is_pinned && (
           <View style={s.pinnedBadge}>
-            <Ionicons name="push-outline" size={11} color={colors.KNU} />
+            <Ionicons name="push-outline" size={11} color="#ef4444" />
             <Text style={s.pinnedText}>필독</Text>
           </View>
         )}
@@ -179,7 +179,7 @@ const s = StyleSheet.create({
     opacity: 0.8,
   },
   cardPinned: {
-    backgroundColor: "#E3F2FD", // [추가] 필독 공지 연한 하늘색색 배경
+    backgroundColor: colors.WHITE, // [추가] 필독 공지 연한 하늘색색 배경
     borderColor: colors.KNU,
     borderWidth: 1,
   },
@@ -196,19 +196,19 @@ const s = StyleSheet.create({
   pinnedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.WHITE,
+    backgroundColor: "#fef2f2", // 연한 빨간색 배경
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     gap: 3,
     borderWidth: 1,
-    borderColor: colors.KNU,
+    borderColor: "#ef4444", // 빨간색 테두리
     marginTop: 2, // 제목과 세로 정렬 맞추기
   },
   pinnedText: {
     fontSize: 10,
     fontWeight: "800",
-    color: colors.KNU,
+    color: "#ef4444", // 빨간색 글씨
   },
   
   // [추가] 제목 컨테이너

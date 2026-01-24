@@ -1,16 +1,21 @@
 # app/services/scraper.py
 from bs4 import BeautifulSoup
 import httpx
+import os
 from urllib.parse import urljoin
 import re
 from datetime import datetime
+from typing import Dict, Any, Optional
 from app.core.logger import get_logger
 
 logger = get_logger()
 
-async def scrape_notice_content(url: str):
+async def scrape_notice_content(url: str) -> Optional[Dict[str, Any]]:
+    # SSL 검증 설정 (환경 변수로 제어)
+    ssl_verify = os.getenv("SSL_VERIFY", "False").lower() == "true"
+    
     try:
-        async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
+        async with httpx.AsyncClient(verify=ssl_verify, timeout=15.0) as client:
             response = await client.get(url)
             response.raise_for_status()
     except Exception as e:
@@ -114,20 +119,36 @@ async def scrape_notice_content(url: str):
                 if isinstance(src, str):
                     data["images"].append(urljoin(url, src))
             
-            # 스크립트 제거
+            # 불필요한 요소 제거 (스크립트, 스타일, 숨겨진 요소 등)
             for script in content_div(["script", "style", "iframe"]):
                 script.decompose()
+            
+            # 특정 클래스 요소 제거 (CMS 시스템의 불필요한 요소)
+            for unwanted_class in ['contents_add_one1', 'contents_add_one2', 'contents_add_one', 'hide_txt']:
+                for elem in content_div.find_all(class_=unwanted_class):
+                    elem.decompose()
+            
+            # display:none 또는 visibility:hidden 요소 제거
+            for elem in content_div.find_all(True):  # 모든 태그 검색
+                style_attr = elem.get('style')
+                if style_attr and isinstance(style_attr, str):
+                    style_lower = style_attr.lower().replace(' ', '')
+                    if 'display:none' in style_lower or 'visibility:hidden' in style_lower:
+                        elem.decompose()
             
             # 텍스트
             lines = []
             for element in content_div.find_all(['p', 'div', 'br', 'li', 'h4', 'h5']):
                 text = element.get_text(strip=True)
-                if text:
+                # undefined 텍스트 필터링 및 의미있는 텍스트만 추출
+                if text and text != 'undefined' and len(text) > 1:
                     lines.append(text)
             
             if not lines:
                  raw_text = content_div.get_text("\n", strip=True)
-                 if raw_text:
+                 # undefined 제거
+                 raw_text = raw_text.replace('undefined', '').strip()
+                 if raw_text and len(raw_text) > 1:
                     data["texts"].append(raw_text)
             else:
                  data["texts"] = lines

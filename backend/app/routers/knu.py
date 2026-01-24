@@ -24,6 +24,7 @@ from app.services.scraper import scrape_notice_content
 from app.core.logger import get_logger
 from app.utils.security import ensure_allowed_url
 from app.core.config import NOTICE_CONFIGS
+from app.middleware.auth import verify_admin_key
 
 router = APIRouter()
 logger = get_logger()
@@ -404,14 +405,19 @@ async def get_categories():
     }
 
 # ============================================================
-# 수동 크롤링 실행 (테스트/디버깅용)
+# 수동 크롤링 실행 (관리자 전용 - API 키 인증 필요)
 # ============================================================
 @router.post("/admin/crawl")
 async def manual_crawl(
     category: Optional[str] = Query(None, description="크롤링할 카테고리 (없으면 전체)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_admin_key)
 ):
-    """수동으로 크롤링 실행 (필독 감지 테스트용)"""
+    """
+    [관리자 전용] 수동으로 크롤링 실행 
+    
+    사용법: X-API-Key 헤더에 관리자 API 키 포함 필요
+    """
     try:
         categories_to_crawl = [category] if category and category in NOTICE_CONFIGS else list(NOTICE_CONFIGS.keys())
         
@@ -497,12 +503,17 @@ async def advanced_search(
     }
 
 # ============================================================
-# 통계 API (신규)
+# 통계 API (관리자 전용 - API 키 인증 필요)
 # ============================================================
 @router.get("/stats")
-async def get_statistics(db: AsyncSession = Depends(get_db)):
+async def get_statistics(
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_admin_key)
+):
     """
-    관리자용 통계 정보
+    [관리자 전용] 시스템 통계 정보
+    
+    사용법: X-API-Key 헤더에 관리자 API 키 포함 필요
     """
     from datetime import datetime, timezone
     
