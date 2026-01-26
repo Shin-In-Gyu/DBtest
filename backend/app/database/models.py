@@ -9,6 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
+from sqlalchemy.sql import func
 
 from .database import Base
 
@@ -62,9 +63,10 @@ class Notice(Base):
     is_pinned: Mapped[bool] = mapped_column(default=False, index=True)
     # [크롤링 시간]
     crawled_at: Mapped[datetime] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True),
+        server_default=func.now(),
         default=lambda: datetime.now(timezone.utc),
-        index=True  # 인덱스 추가
+        index=True
     )
     
     # [AI 요약]
@@ -101,8 +103,9 @@ class Device(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     token: Mapped[str] = mapped_column(String, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, 
-        default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(timezone.utc),
     )
 
     subscriptions: Mapped[List["Keyword"]] = relationship(
@@ -127,7 +130,7 @@ class Scrap(Base):
         index=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         default=lambda: datetime.now(timezone.utc),
         index=True  # 정렬용 인덱스
     )
@@ -153,7 +156,7 @@ class NotificationHistory(Base):
         index=True
     )
     sent_at: Mapped[datetime] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         default=lambda: datetime.now(timezone.utc)
     )
     
@@ -174,11 +177,11 @@ class CrawlFailureLog(Base):
     error_message: Mapped[str] = mapped_column(Text)
     retry_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         default=lambda: datetime.now(timezone.utc),
         index=True
     )
     last_retry_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         nullable=True
     )

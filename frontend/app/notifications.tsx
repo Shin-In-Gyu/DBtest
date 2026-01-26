@@ -1,7 +1,7 @@
 import KNU_API_BASE from "@/api/base-uri";
 import { getSubscriptions, updateSubscriptions } from "@/api/knuNotice";
 import OtherHeader from "@/components/OtherHeader";
-import { category, colors } from "@/constants";
+import { category, useColors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -11,7 +11,6 @@ import {
   Alert,
   FlatList,
   Pressable,
-  StyleSheet,
   Text,
   View
 } from "react-native";
@@ -21,6 +20,7 @@ const STORAGE_KEY = "@notification_subscriptions";
 
 export default function NotificationScreen() {
   const router = useRouter();
+  const colors = useColors();
   const [tab, setTab] = useState<"general" | "dept">("general");
   
   // [New] 서버 데이터 상태
@@ -166,44 +166,49 @@ export default function NotificationScreen() {
 
   return (
     <>
-      {/* [수정] 우측 상단에 '완료' 버튼 배치 */}
-      <View style={styles.headerContainer}>
-        <OtherHeader title="푸쉬 알림 설정" back={true} />
-        <Pressable 
-          onPress={handleSave} 
-          style={styles.doneHeaderBtn}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={colors.KNU} />
-          ) : (
-            <Text style={styles.doneText}>완료</Text>
-          )}
-        </Pressable>
-      </View>
+      <OtherHeader 
+        title="푸쉬 알림 설정" 
+        back={true}
+        rightElement={
+          <Pressable 
+            onPress={handleSave} 
+            style={({ pressed }) => [
+              styles.doneHeaderBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={colors.KNU} />
+            ) : (
+              <Text style={[styles.doneText, { color: colors.KNU }]}>완료</Text>
+            )}
+          </Pressable>
+        }
+      />
 
-      <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.BACKGROUND }]} edges={["left", "right", "bottom"]}>
         <View style={styles.body}>
-          <Text style={styles.big}>
+          <Text style={[styles.big, { color: colors.TEXT_PRIMARY }]}>
             알림 받고 싶은{"\n"}카테고리를 선택해 주세요
           </Text>
 
           {/* 탭 전환 섹션 */}
-          <View style={styles.tabRow}>
+          <View style={[styles.tabRow, { borderBottomColor: colors.BORDER_COLOR }]}>
             <Pressable
               onPress={() => setTab("general")}
-              style={[styles.tabBtn, tab === "general" && styles.tabBtnActive]}
+              style={[styles.tabBtn, tab === "general" && styles.tabBtnActive(colors)]}
             >
-              <Text style={[styles.tabText, tab === "general" && styles.tabTextActive]}>
+              <Text style={[styles.tabText(colors), tab === "general" && styles.tabTextActive(colors)]}>
                 일반 카테고리
               </Text>
             </Pressable>
 
             <Pressable
               onPress={() => setTab("dept")}
-              style={[styles.tabBtn, tab === "dept" && styles.tabBtnActive]}
+              style={[styles.tabBtn, tab === "dept" && styles.tabBtnActive(colors)]}
             >
-              <Text style={[styles.tabText, tab === "dept" && styles.tabTextActive]}>
+              <Text style={[styles.tabText(colors), tab === "dept" && styles.tabTextActive(colors)]}>
                 학과 카테고리
               </Text>
             </Pressable>
@@ -221,16 +226,16 @@ export default function NotificationScreen() {
               return (
                 <Pressable 
                   onPress={() => toggleCategory(item.id)}
-                  style={[styles.card, isSelected && styles.cardSelected]}
+                  style={[styles.card(colors), isSelected && styles.cardSelected(colors)]}
                 >
-                  <View style={[styles.iconWrap, isSelected && styles.iconWrapSelected]}>
+                  <View style={[styles.iconWrap(colors), isSelected && styles.iconWrapSelected(colors)]}>
                     <Ionicons 
                       name={isSelected ? "checkmark" : item.icon} 
                       size={24} 
-                      color={isSelected ? colors.WHITE : colors.BLACK} 
+                      color={isSelected ? colors.WHITE : colors.TEXT_PRIMARY} 
                     />
                   </View>
-                  <Text style={[styles.cardText, isSelected && styles.cardTextSelected]}>
+                  <Text style={[styles.cardText(colors), isSelected && styles.cardTextSelected(colors)]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -243,68 +248,58 @@ export default function NotificationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.WHITE },
-  headerContainer: {
-    position: 'relative',
-    backgroundColor: colors.WHITE,
-  },
+const styles = {
+  safe: { flex: 1 },
   doneHeaderBtn: {
-    position: 'absolute',
-    right: 16,
-    top: 55, // OtherHeader의 높이에 맞춰 조정 필요
-    zIndex: 10,
     padding: 8,
   },
   doneText: {
     fontSize: 16,
-    fontWeight: "800",
-    color: colors.KNU,
+    fontWeight: "800" as const,
   },
   body: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
-  big: { fontSize: 24, fontWeight: "900", color: colors.BLACK, lineHeight: 34 },
+  big: { fontSize: 24, fontWeight: "900" as const, lineHeight: 34 },
   
-  tabRow: { marginTop: 18, flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
-  tabBtn: { flex: 1, paddingVertical: 12, alignItems: "center", borderBottomWidth: 3, borderBottomColor: "transparent" },
-  tabBtnActive: { borderBottomColor: colors.KNU },
-  tabText: { fontSize: 15, fontWeight: "800", color: "#9CA3AF" },
-  tabTextActive: { color: colors.KNU },
+  tabRow: { marginTop: 18, flexDirection: "row" as const, borderBottomWidth: 1 },
+  tabBtn: { flex: 1, paddingVertical: 12, alignItems: "center" as const, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  tabBtnActive: (colors: ReturnType<typeof useColors>) => ({ borderBottomColor: colors.KNU }),
+  tabText: (colors: ReturnType<typeof useColors>) => ({ fontSize: 15, fontWeight: "800" as const, color: colors.TEXT_TERTIARY }),
+  tabTextActive: (colors: ReturnType<typeof useColors>) => ({ color: colors.KNU }),
 
-  card: {
+  card: (colors: ReturnType<typeof useColors>) => ({
     flex: 1,
     minHeight: 110,
     borderRadius: 16,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: colors.BACKGROUND_LIGHT,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
     gap: 8,
     borderWidth: 2,
     borderColor: "transparent",
-  },
-  cardSelected: {
-    backgroundColor: colors.WHITE,
+  }),
+  cardSelected: (colors: ReturnType<typeof useColors>) => ({
+    backgroundColor: colors.CARD_BACKGROUND,
     borderColor: colors.KNU,
-    // 선택 시 그림자 효과로 강조
     shadowColor: colors.KNU,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-  },
-  iconWrap: {
+  }),
+  iconWrap: (colors: ReturnType<typeof useColors>) => ({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: colors.WHITE,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: colors.CARD_BACKGROUND,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  iconWrapSelected: {
+    borderColor: colors.BORDER_COLOR,
+  }),
+  iconWrapSelected: (colors: ReturnType<typeof useColors>) => ({
     backgroundColor: colors.KNU,
     borderColor: colors.KNU,
-  },
-  cardText: { fontSize: 13, fontWeight: "800", color: "#4B5563" },
-  cardTextSelected: { color: colors.KNU, fontWeight: "900" },
-});
+  }),
+  cardText: (colors: ReturnType<typeof useColors>) => ({ fontSize: 13, fontWeight: "800" as const, color: colors.TEXT_SECONDARY }),
+  cardTextSelected: (colors: ReturnType<typeof useColors>) => ({ color: colors.KNU, fontWeight: "900" as const }),
+};

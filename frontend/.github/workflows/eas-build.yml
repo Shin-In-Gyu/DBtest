@@ -1,3 +1,4 @@
+# EAS Build (kangrimi). Repo secret 필요: EAS_TOKEN (https://expo.dev/accounts/hotae_developer/settings/access-tokens)
 name: EAS Build
 
 on:
@@ -5,10 +6,27 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "Build platform"
+        required: true
+        default: "android"
+        type: choice
+        options:
+          - android
+          - ios
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - preview
 
 jobs:
   build:
-    name: Install and build
+    name: EAS Build (${{ github.event_name == 'workflow_dispatch' && format('{0} - {1}', inputs.platform, inputs.profile) || 'Android production' }})
     runs-on: ubuntu-latest
     steps:
       - name: 🛎 Checkout
@@ -17,8 +35,8 @@ jobs:
       - name: 📦 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-          cache: npm
+          node-version: "20.x"
+          cache: "npm"
 
       - name: 📥 Install dependencies
         run: npm ci
@@ -29,7 +47,10 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EAS_TOKEN }}
 
-      - name: 🏗 Build Android on EAS
-        run: eas build --platform android --non-interactive
-        env:
-          EAS_BUILD_PROFILE: production
+      - name: 🏗 EAS Build
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            eas build --platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive
+          else
+            eas build --platform android --profile production --non-interactive
+          fi

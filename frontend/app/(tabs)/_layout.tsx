@@ -1,18 +1,23 @@
 import HomeHeader from "@/components/HomeHeader";
 import MoreTabHeader from "@/components/MoreTabHeader";
 import OtherHeader from "@/components/OtherHeader";
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
 
 export default function TabLayout() {
+  const colors = useColors();
+  
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.KNU,
+        tabBarInactiveTintColor: colors.TEXT_TERTIARY,
         tabBarStyle: {
-          backgroundColor: colors.WHITE,
+          backgroundColor: colors.CARD_BACKGROUND,
+          borderTopWidth: 1,
+          borderTopColor: colors.BORDER_COLOR,
         },
         tabBarLabelStyle: { fontSize: 11 },
         headerShown: false,

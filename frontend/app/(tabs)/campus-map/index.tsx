@@ -1,4 +1,4 @@
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { BUILDINGS, CAMPUS_CENTER } from "@/constants/knuSources";
 import { Building } from "@/types";
 import {
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CampusMapScreen() {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
   const mapRef = useRef<NaverMapViewRef>(null);
 
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(
@@ -42,7 +43,7 @@ export default function CampusMapScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.BACKGROUND }]}>
       {/* 상단: 네이버 지도 */}
       <View style={styles.mapWrap}>
         <NaverMapView
@@ -72,7 +73,7 @@ export default function CampusMapScreen() {
       {/* 하단: 건물 선택 탭바 */}
       <View
         style={[
-          styles.tabBar,
+          styles.tabBar(colors),
           { paddingBottom: Math.max(insets.bottom, 10) },
         ]}
       >
@@ -91,12 +92,12 @@ export default function CampusMapScreen() {
                 key={`${building.name}-${building.code ?? "all"}`}
                 onPress={() => handleBuildingSelect(building)}
                 style={({ pressed }) => [
-                  styles.tab,
-                  active && styles.tabActive,
+                  styles.tab(colors),
+                  active && styles.tabActive(colors),
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                <Text style={[styles.tabText(colors), active && styles.tabTextActive(colors)]}>
                   {building.name}
                 </Text>
               </Pressable>
@@ -108,39 +109,39 @@ export default function CampusMapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+const styles = {
+  container: { flex: 1 },
   mapWrap: { flex: 1 },
-  map: { flex: 1, width: "100%", height: "100%" },
-  tabBar: {
-    backgroundColor: colors.WHITE,
+  map: { flex: 1 },
+  tabBar: (colors: ReturnType<typeof useColors>) => ({
+    backgroundColor: colors.CARD_BACKGROUND,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: colors.BORDER_COLOR,
     paddingTop: 12,
-  },
+  }),
   tabBarContent: {
     paddingHorizontal: 12,
     gap: 8,
   },
-  tab: {
+  tab: (colors: ReturnType<typeof useColors>) => ({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#f8fafc",
-  },
-  tabActive: {
+    borderColor: colors.BORDER_COLOR,
+    backgroundColor: colors.BACKGROUND_LIGHT,
+  }),
+  tabActive: (colors: ReturnType<typeof useColors>) => ({
     borderColor: colors.KNU,
     backgroundColor: colors.KNU,
-  },
-  tabText: {
+  }),
+  tabText: (colors: ReturnType<typeof useColors>) => ({
     fontSize: 14,
-    fontWeight: "600",
-    color: "#334155",
-  },
-  tabTextActive: {
+    fontWeight: "600" as const,
+    color: colors.TEXT_SECONDARY,
+  }),
+  tabTextActive: (colors: ReturnType<typeof useColors>) => ({
     color: colors.WHITE,
-    fontWeight: "700",
-  },
-});
+    fontWeight: "700" as const,
+  }),
+};

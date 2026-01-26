@@ -3,13 +3,14 @@ import KNU_API_BASE from "@/api/base-uri";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import "react-native-reanimated";
 import { BookmarksProvider } from "./providers/BookmarksProvider";
 import { ReadStatusProvider } from "./providers/ReadStatusProvider";
-import Constants from "expo-constants";
+import { ThemeProvider, useTheme } from "./providers/ThemeProvider";
 
 /**
  * 푸시 알림 권한·기기 등록.
@@ -63,6 +64,7 @@ export const unstable_settings = {
 };
 
 function RootNavigation() {
+  const { isDark } = useTheme();
   return (
     <>
       <Stack>
@@ -72,7 +74,7 @@ function RootNavigation() {
         <Stack.Screen name="dept-select" options={{ headerShown: false }} />
         <Stack.Screen name="notice-detail" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style={isDark ? "light" : "dark"} />
     </>
   );
 }
@@ -87,11 +89,13 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
-        <BookmarksProvider>
-          <ReadStatusProvider>
-            <RootNavigation />
-          </ReadStatusProvider>
-        </BookmarksProvider>
+        <ThemeProvider>
+          <BookmarksProvider>
+            <ReadStatusProvider>
+              <RootNavigation />
+            </ReadStatusProvider>
+          </BookmarksProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </QueryClientProvider>
   );

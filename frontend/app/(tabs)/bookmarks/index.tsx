@@ -1,6 +1,7 @@
 import { useBookmarks } from "@/app/providers/BookmarksProvider";
 import { useReadStatus } from "@/app/providers/ReadStatusProvider";
 import NoticeCard from "@/components/NoticeCard";
+import { useColors } from "@/constants";
 import { router } from "expo-router";
 import React, { useMemo } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
@@ -15,6 +16,7 @@ function bookmarkKey(item: any, index: number) {
 }
 
 export default function BookmarksScreen() {
+  const colors = useColors();
   const { ready, bookmarks, isBookmarked, toggleBookmark } = useBookmarks();
   const { isRead } = useReadStatus();
 
@@ -24,15 +26,15 @@ export default function BookmarksScreen() {
   }, [bookmarks]);
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { backgroundColor: colors.BACKGROUND }]}>
       {!ready ? (
-        <Text style={s.helper}>불러오는 중...</Text>
+        <Text style={[s.helper, { color: colors.TEXT_SECONDARY }]}>불러오는 중...</Text>
       ) : (
         <FlatList
           data={data}
           keyExtractor={(item, index) => bookmarkKey(item, index)}
           contentContainerStyle={data.length === 0 ? s.empty : s.list}
-          ListEmptyComponent={<Text style={s.helper}>북마크가 없습니다.</Text>}
+          ListEmptyComponent={<Text style={[s.helper, { color: colors.TEXT_SECONDARY }]}>북마크가 없습니다.</Text>}
           renderItem={({ item }) => (
             <NoticeCard
               item={item}
@@ -69,7 +71,7 @@ export default function BookmarksScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f7f8fa" },
+  container: { flex: 1 },
   list: { padding: 12, gap: 10 },
   empty: {
     flexGrow: 1,
@@ -77,5 +79,5 @@ const s = StyleSheet.create({
     justifyContent: "center",
     padding: 16,
   },
-  helper: { color: "#6b7280", fontSize: 14 },
+  helper: { fontSize: 14 },
 });

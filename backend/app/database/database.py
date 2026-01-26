@@ -8,8 +8,19 @@ from app.core.logger import logger
 
 load_dotenv()
 
-# [설정] SQLite 비동기 드라이버
-SQLALCHEMY_DATABASE_URL = os.getenv("DB_URL", "sqlite+aiosqlite:///./knoti.db")
+# [설정] DATABASE_URL 우선 사용, 없으면 DB_URL, 둘 다 없으면 SQLite 기본값
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
+if DATABASE_URL:
+    # PostgreSQL URL인 경우 비동기 드라이버로 변환 (psycopg2 -> asyncpg)
+    if DATABASE_URL.startswith("postgresql+psycopg2://"):
+        SQLALCHEMY_DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+    elif DATABASE_URL.startswith("postgresql://"):
+        SQLALCHEMY_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    else:
+        SQLALCHEMY_DATABASE_URL = DATABASE_URL
+else:
+    # 기본값: SQLite
+    SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./knoti.db"
 
 connect_args = {"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
 

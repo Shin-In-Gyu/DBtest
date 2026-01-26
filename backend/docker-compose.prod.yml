@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  app:
+    image: hwanghotae/kangrimi-server:latest
+    container_name: kangrimi-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      # 데이터베이스 설정
+      - DB_URL=${DB_URL}
+      
+      # AI 서비스
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      
+      # 보안 설정
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - SSL_VERIFY=${SSL_VERIFY:-true}
+      
+      # CORS 설정 (프로덕션: 모든 origin 허용)
+      - ALLOWED_ORIGINS=
+      
+      # 테스트 엔드포인트 비활성화
+      - ENABLE_TEST_ENDPOINTS=false
+      
+      # 환경 설정
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      
+      # Firebase (선택)
+      - FIREBASE_KEY_PATH=${FIREBASE_KEY_PATH:-}
+    
+    volumes:
+      # SQLite DB 영속성 (PostgreSQL 사용 시 불필요)
+      - ./data:/app/data
+      
+      # Firebase 키 파일 (사용 시)
+      - ./serviceAccountKey.json:/app/serviceAccountKey.json:ro
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

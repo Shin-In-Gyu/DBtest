@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.env/
+
+# 환경 변수 및 보안 파일
+.env
+.env.local
+.env.*.local
+serviceAccountKey.json
+secrets.json
+
+# 데이터베이스
+*.db
+*.sqlite3
+knoti.db
+
+# 로그
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 문서
+*.md
+!README.md
+
+# 배포 관련
+docker-compose*.yml
+.dockerignore
+Dockerfile
+
+# 테스트
+test_connection.html
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 기타
+run.bat
+*.bak
+*.tmp

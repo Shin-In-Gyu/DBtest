@@ -1,11 +1,7 @@
 // frontend/constants/index.ts
+import { useTheme } from "@/app/providers/ThemeProvider";
 import { Category } from "@/types";
-
-const colors = {
-  KNU: "#006DB8",
-  WHITE: "#fff",
-  BLACK: "#000",
-};
+import colors, { themeColors } from "./colors";
 
 /**
  * [수정] 카테고리 구성 변경
@@ -47,4 +43,13 @@ const category: { general: Category[]; dept: Category[] } = {
   ],
 };
 
+/**
+ * 현재 테마에 맞는 색상을 반환하는 hook
+ */
+export function useColors() {
+  const { theme } = useTheme();
+  return themeColors[theme];
+}
+
 export { category, colors };
+

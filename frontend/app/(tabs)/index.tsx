@@ -1,6 +1,6 @@
 import { DeptSubTabs } from "@/components/DeptSubTabs";
 import { NoticeListPage } from "@/components/NoticeListPage";
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { categories } from "@/constants/knuSources";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
@@ -11,7 +11,6 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -26,6 +25,7 @@ const DEPT_STORAGE_KEY_V1 = "@knu_selected_dept_v1";
 const DEPT_STORAGE_KEY_V2 = "@knu_selected_depts_v2";
 
 export default function HomeScreen() {
+  const colors = useColors();
   const tabs: TabItem[] = useMemo(() => {
     const deptTab = { id: "dept", label: "학과" };
     const idx = categories.findIndex((t) => t.id === "all");
@@ -177,8 +177,8 @@ export default function HomeScreen() {
       : null;
 
   return (
-    <View style={s.container}>
-      <View style={s.tabWrap}>
+    <View style={[s.container, { backgroundColor: colors.BACKGROUND }]}>
+      <View style={[s.tabWrap, { backgroundColor: colors.CARD_BACKGROUND, borderBottomColor: colors.BORDER_COLOR_LIGHT }]}>
         <FlatList
           ref={tabListRef}
           horizontal
@@ -192,12 +192,12 @@ export default function HomeScreen() {
               <Pressable
                 onPress={() => onTabPress(item.id, index)}
                 style={({ pressed }) => [
-                  s.tabBtn,
-                  active && s.tabBtnActive,
+                  s.tabBtn(colors),
+                  active && s.tabBtnActive(colors),
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                <Text style={[s.tabText, active && s.tabTextActive]}>{item.label}</Text>
+                <Text style={[s.tabText(colors), active && s.tabTextActive(colors)]}>{item.label}</Text>
               </Pressable>
             );
           }}
@@ -246,21 +246,27 @@ export default function HomeScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f7f8fa" },
+const s = {
+  container: { flex: 1 },
   tabWrap: {
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#eef0f3",
   },
   tabList: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  tabBtn: {
+  tabBtn: (colors: ReturnType<typeof useColors>) => ({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#f1f5f9",
-  },
-  tabBtnActive: { backgroundColor: colors.KNU },
-  tabText: { fontSize: 13, fontWeight: "700", color: "#334155" },
-  tabTextActive: { color: "#fff" },
-});
+    backgroundColor: colors.BACKGROUND_LIGHT,
+  }),
+  tabBtnActive: (colors: ReturnType<typeof useColors>) => ({ 
+    backgroundColor: colors.KNU 
+  }),
+  tabText: (colors: ReturnType<typeof useColors>) => ({ 
+    fontSize: 13, 
+    fontWeight: "700" as const, 
+    color: colors.TEXT_SECONDARY 
+  }),
+  tabTextActive: (colors: ReturnType<typeof useColors>) => ({ 
+    color: colors.WHITE 
+  }),
+};

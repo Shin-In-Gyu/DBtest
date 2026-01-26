@@ -1,3 +1,4 @@
+import { useColors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -6,12 +7,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function HomeHeader() {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
 
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top }]}>
+    <View style={[styles.wrap, { paddingTop: insets.top, backgroundColor: colors.CARD_BACKGROUND }]}>
       <View style={styles.inner}>
         {/* 왼쪽: 앱 이름 */}
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.TEXT_PRIMARY }]} numberOfLines={1}>
           강남대 알림이
         </Text>
 
@@ -24,7 +26,7 @@ export default function HomeHeader() {
               pressed && { opacity: 0.6 },
             ]}
           >
-            <Ionicons name="search-outline" size={24} />
+            <Ionicons name="search-outline" size={24} color={colors.TEXT_PRIMARY} />
           </Pressable>
 
           <Pressable
@@ -34,7 +36,7 @@ export default function HomeHeader() {
               pressed && { opacity: 0.6 },
             ]}
           >
-            <Ionicons name="notifications-outline" size={24} />
+            <Ionicons name="notifications-outline" size={24} color={colors.TEXT_PRIMARY} />
             {/* <View style={styles.badge} /> */}
           </Pressable>
         </View>
@@ -44,9 +46,7 @@ export default function HomeHeader() {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    backgroundColor: "#fff",
-  },
+  wrap: {},
   inner: {
     height: 56,
     paddingHorizontal: 16,

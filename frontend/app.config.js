@@ -3,8 +3,10 @@
 require('dotenv').config();
 
 module.exports = ({ config }) => {
-  // .env 파일 또는 환경 변수에서 API URL 가져오기 (없으면 null로 설정하여 기본값 사용)
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || null;
+  // .env 파일 또는 환경 변수에서 API URL 가져오기
+  // 배포 서버: EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211
+  // 로컬 개발: EXPO_PUBLIC_API_BASE_URL=http://localhost:8000
+  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 
   return {
     ...config,

@@ -4,7 +4,7 @@ import ErrorBanner from "@/components/ErrorBanner";
 import { toUserFriendlyMessage } from "@/utils/errorMessage";
 import NoticeCard from "@/components/NoticeCard";
 import OtherHeader from "@/components/OtherHeader";
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { useKnuNotices } from "@/hooks/useKNUNoitces";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -25,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const RECENT_SEARCHES_KEY = "@knu_recent_searches_v1";
 
 export default function SearchScreen() {
+  const colors = useColors();
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [recent, setRecent] = useState<string[]>([]);
@@ -129,14 +130,14 @@ export default function SearchScreen() {
       return (
         <View style={s.footer}>
           <ActivityIndicator color={colors.KNU} />
-          <Text style={s.footerText}>불러오는 중...</Text>
+          <Text style={[s.footerText, { color: colors.TEXT_SECONDARY }]}>불러오는 중...</Text>
         </View>
       );
     }
     if (!hasNextPage && flatItems.length > 0) {
       return (
         <View style={s.footer}>
-          <Text style={s.footerText}>마지막입니다</Text>
+          <Text style={[s.footerText, { color: colors.TEXT_SECONDARY }]}>마지막입니다</Text>
         </View>
       );
     }
@@ -145,15 +146,15 @@ export default function SearchScreen() {
         <View style={s.footer}>
           <Pressable
             onPress={() => fetchNextPage()}
-            style={({ pressed }) => [s.loadMoreBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [getLoadMoreBtnStyle(colors), pressed && { opacity: 0.7 }]}
           >
-            <Text style={s.loadMoreText}>더 불러오기</Text>
+            <Text style={[s.loadMoreText, { color: colors.WHITE }]}>더 불러오기</Text>
           </Pressable>
         </View>
       );
     }
     return null;
-  }, [searchQuery, isFetchingNextPage, hasNextPage, fetchNextPage, flatItems.length]);
+  }, [searchQuery, isFetchingNextPage, hasNextPage, fetchNextPage, flatItems.length, colors]);
 
   const showResults = !!searchQuery;
   const showRecent = !showResults;
@@ -161,16 +162,16 @@ export default function SearchScreen() {
   return (
     <>
       <OtherHeader title="검색" back={true} />
-      <SafeAreaView style={s.safe} edges={["left", "right", "bottom"]}>
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.BACKGROUND }]} edges={["left", "right", "bottom"]}>
         <View style={s.container}>
-          <View style={s.searchBox}>
-            <Ionicons name="search" size={20} color="#9CA3AF" />
+          <View style={[s.searchBox, { backgroundColor: colors.BACKGROUND_LIGHT }]}>
+            <Ionicons name="search" size={20} color={colors.PLACEHOLDER_COLOR} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="검색어를 입력하세요"
-              placeholderTextColor="#9CA3AF"
-              style={s.input}
+              placeholderTextColor={colors.PLACEHOLDER_COLOR}
+              style={[s.input, { color: colors.TEXT_PRIMARY }]}
               returnKeyType="search"
               onSubmitEditing={onSubmit}
             />
@@ -179,26 +180,26 @@ export default function SearchScreen() {
           {showRecent && (
             <>
               <View style={s.sectionRow}>
-                <Text style={s.sectionTitle}>최근 검색어</Text>
+                <Text style={[s.sectionTitle, { color: colors.TEXT_PRIMARY }]}>최근 검색어</Text>
                 {recent.length > 0 && (
                   <Pressable onPress={clearRecent} hitSlop={8}>
-                    <Text style={s.link}>전체삭제</Text>
+                    <Text style={[s.link, { color: colors.TEXT_SECONDARY }]}>전체삭제</Text>
                   </Pressable>
                 )}
               </View>
 
               {recent.length === 0 ? (
-                <Text style={s.empty}>최근 검색어가 없습니다.</Text>
+                <Text style={[s.empty, { color: colors.TEXT_TERTIARY }]}>최근 검색어가 없습니다.</Text>
               ) : (
                 <View style={s.chips}>
                   {recent.map((w) => (
                     <Pressable
                       key={w}
                       onPress={() => onRecentPress(w)}
-                      style={s.chip}
+                      style={getChipStyle(colors)}
                       hitSlop={6}
                     >
-                      <Text style={s.chipText}>{w}</Text>
+                      <Text style={[s.chipText, { color: colors.TEXT_PRIMARY }]}>{w}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -268,7 +269,7 @@ export default function SearchScreen() {
                 windowSize={7}
                 removeClippedSubviews
                 ListEmptyComponent={
-                  <Text style={s.helperText}>
+                  <Text style={[s.helperText, { color: colors.TEXT_SECONDARY }]}>
                     {isFetching
                       ? "검색 중..."
                       : `"${searchQuery}"에 대한 검색 결과가 없습니다.`}
@@ -287,7 +288,6 @@ export default function SearchScreen() {
 const s = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.WHITE,
   },
   container: {
     flex: 1,
@@ -297,7 +297,6 @@ const s = StyleSheet.create({
     marginHorizontal: 12,
     height: 52,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
     paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -306,7 +305,6 @@ const s = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: colors.BLACK,
   },
   sectionRow: {
     marginTop: 20,
@@ -318,17 +316,14 @@ const s = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: colors.BLACK,
   },
   link: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#6B7280",
   },
   empty: {
     marginTop: 10,
     marginHorizontal: 12,
-    color: "#9CA3AF",
   },
   chips: {
     flexDirection: "row",
@@ -337,16 +332,7 @@ const s = StyleSheet.create({
     marginTop: 10,
     marginHorizontal: 12,
   },
-  chip: {
-    backgroundColor: colors.WHITE,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
   chipText: {
-    color: colors.BLACK,
     fontWeight: "600",
   },
   listContent: { padding: 12, gap: 10 },
@@ -357,7 +343,6 @@ const s = StyleSheet.create({
     padding: 16,
   },
   helperText: {
-    color: "#6b7280",
     fontSize: 14,
     marginTop: 4,
   },
@@ -367,17 +352,25 @@ const s = StyleSheet.create({
     gap: 10,
   },
   footerText: {
-    color: "#6b7280",
     fontSize: 13,
   },
-  loadMoreBtn: {
-    backgroundColor: colors.KNU,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
   loadMoreText: {
-    color: colors.WHITE,
     fontWeight: "800",
   },
+});
+
+const getChipStyle = (colors: ReturnType<typeof useColors>) => ({
+  backgroundColor: colors.CARD_BACKGROUND,
+  borderWidth: 1,
+  borderColor: colors.BORDER_COLOR,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 999,
+});
+
+const getLoadMoreBtnStyle = (colors: ReturnType<typeof useColors>) => ({
+  backgroundColor: colors.KNU,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  borderRadius: 10,
 });

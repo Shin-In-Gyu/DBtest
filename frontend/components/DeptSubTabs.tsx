@@ -1,4 +1,4 @@
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { CATEGORY_LABEL } from "@/constants/knuSources";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useRef } from "react";
@@ -20,6 +20,7 @@ export function DeptSubTabs({
   onAdd: () => void;
   onRemove: (index: number) => void;
 }) {
+  const colors = useColors();
   const subTabListRef = useRef<FlatList>(null);
 
   const handleRemove = useCallback(
@@ -31,7 +32,7 @@ export function DeptSubTabs({
   );
 
   return (
-    <View style={s.subTabWrap}>
+    <View style={[s.subTabWrap, { backgroundColor: colors.CARD_BACKGROUND, borderBottomColor: colors.BORDER_COLOR_LIGHT }]}>
       <FlatList
         ref={subTabListRef}
         horizontal
@@ -46,12 +47,12 @@ export function DeptSubTabs({
             <Pressable
               onPress={() => onSelect(index)}
               style={({ pressed }) => [
-                s.subTabBtn,
-                active && s.subTabBtnActive,
+                s.subTabBtn(colors),
+                active && s.subTabBtnActive(colors),
                 pressed && { opacity: 0.7 },
               ]}
             >
-              <Text style={[s.subTabText, active && s.subTabTextActive]}>
+              <Text style={[s.subTabText(colors), active && s.subTabTextActive(colors)]}>
                 {deptLabel}
               </Text>
               <Pressable
@@ -65,7 +66,7 @@ export function DeptSubTabs({
                 <Ionicons
                   name="close-circle"
                   size={16}
-                  color={active ? "#fff" : "#64748b"}
+                  color={active ? colors.WHITE : colors.TEXT_TERTIARY}
                 />
               </Pressable>
             </Pressable>
@@ -87,25 +88,31 @@ export function DeptSubTabs({
   );
 }
 
-const s = StyleSheet.create({
+const s = {
   subTabWrap: {
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#eef0f3",
   },
   subTabList: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
-  subTabBtn: {
-    flexDirection: "row",
-    alignItems: "center",
+  subTabBtn: (colors: ReturnType<typeof useColors>) => ({
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#f1f5f9",
-  },
-  subTabBtnActive: { backgroundColor: colors.KNU },
-  subTabText: { fontSize: 13, fontWeight: "700", color: "#334155" },
-  subTabTextActive: { color: "#fff" },
+    backgroundColor: colors.BACKGROUND_LIGHT,
+  }),
+  subTabBtnActive: (colors: ReturnType<typeof useColors>) => ({ 
+    backgroundColor: colors.KNU 
+  }),
+  subTabText: (colors: ReturnType<typeof useColors>) => ({ 
+    fontSize: 13, 
+    fontWeight: "700" as const, 
+    color: colors.TEXT_SECONDARY 
+  }),
+  subTabTextActive: (colors: ReturnType<typeof useColors>) => ({ 
+    color: colors.WHITE 
+  }),
   subTabRemoveBtn: {
     marginLeft: 2,
   },
@@ -113,7 +120,7 @@ const s = StyleSheet.create({
     marginLeft: 6,
     paddingHorizontal: 8,
     paddingVertical: 8,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
   },
-});
+};

@@ -1,3 +1,4 @@
+import { useColors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -8,14 +9,17 @@ type OtherHeaderProps = {
   title: string;
   back?: boolean;
   onBackPress?: () => void;
+  rightElement?: React.ReactNode;
 };
 
 export default function OtherHeader({
   title,
   back = false,
   onBackPress,
+  rightElement,
 }: OtherHeaderProps) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
 
   const handleBack = () => {
     if (onBackPress) return onBackPress();
@@ -23,7 +27,7 @@ export default function OtherHeader({
   };
 
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top }]}>
+    <View style={[styles.wrap, { paddingTop: insets.top, backgroundColor: colors.CARD_BACKGROUND }]}>
       <View style={styles.inner}>
         {/* 왼쪽 */}
         {back ? (
@@ -35,28 +39,26 @@ export default function OtherHeader({
               pressed && { opacity: 0.6 },
             ]}
           >
-            <Ionicons name="chevron-back" size={26} color="#111" />
+            <Ionicons name="chevron-back" size={26} color={colors.TEXT_PRIMARY} />
           </Pressable>
         ) : (
           <View style={styles.placeholder} />
         )}
 
         {/* 가운데 타이틀 */}
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.TEXT_PRIMARY }]} numberOfLines={1}>
           {title}
         </Text>
 
-        {/* 오른쪽 자리(비워두기: 중앙 정렬 유지) */}
-        <View style={styles.placeholder} />
+        {/* 오른쪽 */}
+        {rightElement || <View style={styles.placeholder} />}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    backgroundColor: "#fff",
-  },
+  wrap: {},
   inner: {
     height: 56,
     paddingHorizontal: 16,
@@ -79,7 +81,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 18,
     fontWeight: "800",
-    color: "#111",
     paddingHorizontal: 8,
   },
 });

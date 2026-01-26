@@ -1,32 +1,37 @@
 {
   "expo": {
-    "name": "CampusNoticeFE",
-    "slug": "CampusNoticeFE",
+    "name": "강림이",
+    "slug": "kangrimi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "campusnoticefe",
+    "icon": "./assets/images/kangrimi-icon.png",
+    "scheme": "kangrimi",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.campusnotice.fe"
+      "bundleIdentifier": "com.campusnotice.fe",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "package": "com.campusnotice.fe",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/kangrimi-icon-foreground.png",
+        "monochromeImage": "./assets/images/kangrimi-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": []
+      "permissions": [],
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/kangrimi-favicon.png"
     },
     "plugins": [
       "expo-notifications",
@@ -34,7 +39,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/knu-icon.png",
+          "image": "./assets/images/kangrimi-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -67,8 +72,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ded7e130-9abf-478d-8784-0e56fcd14a96"
+        "projectId": "9dc372b6-bf38-4333-9bb7-7c1d098a81fb"
       }
-    }
+    },
+    "owner": "hotae_developer"
   }
 }
