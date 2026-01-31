@@ -1,12 +1,13 @@
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { Stack } from "expo-router";
 
 export default function MoreLayout() {
+  const colors = useColors();
   return (
     <Stack
       screenOptions={{
         contentStyle: {
-          backgroundColor: colors.WHITE,
+          backgroundColor: colors.CARD_BACKGROUND,
         },
       }}
     >

@@ -4,7 +4,7 @@
 
 ### 1. 환경 변수 설정 ✅
 - [x] `frontend/.env` 파일 생성됨
-- [x] `EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211:8000` 설정됨
+- [x] `EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211` 설정됨 (80 포트)
 - [x] `.gitignore`에 `.env` 포함되어 있어 Git에 올라가지 않음
 
 ### 2. HTTP 통신 허용 설정 ✅
@@ -40,7 +40,7 @@ eas build --platform android --profile production
 ### 2. Docker 설정 ✅
 - [x] `Dockerfile` 존재 및 올바른 설정
 - [x] `docker-compose.prod.yml` 생성됨
-- [x] 포트 8000 노출 설정됨
+- [x] 포트 8000 노출 설정됨 (내부), 80 포트로 리버스 프록시됨 (외부)
 
 ### 3. CORS 설정 ✅
 - [x] `ALLOWED_ORIGINS` 빈 값으로 설정 (모든 origin 허용)
@@ -53,7 +53,7 @@ eas build --platform android --profile production
 
 ## ✅ AWS EC2 서버 점검
 
-### 1. 필수 확인 사항 ⚠️
+### 1. 필수 확인 사항 ✅
 ```bash
 # SSH 접속
 ssh -i your-key.pem ubuntu@16.184.63.211
@@ -64,18 +64,19 @@ docker ps
 # 2. 컨테이너 로그 확인
 docker logs kangrimi-backend
 
-# 3. 헬스체크
+# 3. 헬스체크 (서버 내부)
 curl http://localhost:8000/api/health
 
-# 4. 외부에서 접근 테스트
-curl http://16.184.63.211:8000/api/health
+# 4. 외부에서 접근 테스트 (80 포트로 리버스 프록시됨)
+curl http://16.184.63.211/api/health
 ```
 
-### 2. AWS Security Group 설정 ⚠️
-- [ ] **확인 필요**: 8000 포트가 인바운드 규칙에 개방되어 있는지
-  - Type: Custom TCP
-  - Port Range: 8000
+### 2. AWS Security Group 설정 ✅
+- [x] **확인 완료**: 80 포트가 인바운드 규칙에 개방됨
+  - Type: HTTP
+  - Port Range: 80
   - Source: 0.0.0.0/0 (또는 필요한 IP만)
+- [x] Nginx 또는 리버스 프록시로 8000 → 80 포트 매핑됨
 
 ### 3. 서버 디렉토리 구조
 ```
@@ -149,9 +150,10 @@ eas build --platform android --profile production
 ## ⚠️ 현재 남은 작업
 
 ### 필수 확인 사항
-1. **AWS Security Group**: 8000 포트 개방 여부 확인
-2. **서버 실행 상태**: Docker 컨테이너가 정상 실행 중인지 확인
-3. **외부 접근 테스트**: `curl http://16.184.63.211:8000/api/health`
+1. ✅ **AWS Security Group**: 80 포트 개방됨
+2. ✅ **서버 실행 상태**: Docker 컨테이너 정상 실행 중
+3. ✅ **외부 접근 테스트**: `curl http://16.184.63.211/api/health` 성공
+4. ✅ **API 엔드포인트**: 공지사항 목록, 카테고리 등 정상 작동
 
 ### 개선 권장 사항
 1. **HTTPS 설정**: 도메인 + Let's Encrypt 또는 AWS ALB + ACM
@@ -184,9 +186,9 @@ npx expo start
 
 ### Frontend에서 "Network Error" 발생 시
 1. `.env` 파일이 있는지 확인
-2. URL이 `http://` (not https://)로 시작하는지 확인
+2. URL이 `http://16.184.63.211` (포트 번호 없이)인지 확인
 3. `app.json`에 HTTP 허용 설정이 있는지 확인
-4. 서버가 실제로 응답하는지 확인: `curl http://16.184.63.211:8000/api/health`
+4. 서버가 실제로 응답하는지 확인: `curl http://16.184.63.211/api/health`
 
 ### Backend에서 CORS 에러 발생 시
 1. `.env`에서 `ALLOWED_ORIGINS=` (빈 값) 확인

@@ -1,7 +1,7 @@
-import KNU_API_BASE from "@/api/base-uri";
-import { getSubscriptions, updateSubscriptions } from "@/api/knuNotice";
+import { getCategories, getSubscriptions, updateSubscriptions } from "@/api/knuNotice";
 import OtherHeader from "@/components/OtherHeader";
 import { category, useColors } from "@/constants";
+import { ensurePushTokenAndRegister, getStoredPushToken } from "@/utils/pushRegistration";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -34,7 +34,7 @@ export default function NotificationScreen() {
   useEffect(() => {
     const loadSaved = async () => {
       try {
-        const token = await AsyncStorage.getItem("@fcm_token");
+        const token = await getStoredPushToken();
         let loaded = false;
         if (token) {
           try {
@@ -69,17 +69,15 @@ export default function NotificationScreen() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${KNU_API_BASE}/categories`);
-        if (response.ok) {
-          const data = await response.json();
-          // { general, dept } | 배열 | 기타
-          if (data && (Array.isArray(data.general) || Array.isArray(data.dept)))
-            setServerData({ general: data.general ?? [], dept: data.dept ?? [] });
-          else if (Array.isArray(data))
-            setServerData({ general: data, dept: [] });
-          else
-            setServerData(null);
-        }
+        // getCategories 함수를 사용하여 URL 조합 및 로깅 처리
+        const data = await getCategories();
+        // { general, dept } | 배열 | 기타
+        if (data && (Array.isArray((data as any).general) || Array.isArray((data as any).dept)))
+          setServerData({ general: (data as any).general ?? [], dept: (data as any).dept ?? [] });
+        else if (Array.isArray(data))
+          setServerData({ general: data, dept: [] });
+        else
+          setServerData(null);
       } catch (e) {
         console.log("카테고리 로드 실패 (기본값 사용):", e);
       }
@@ -135,13 +133,17 @@ export default function NotificationScreen() {
 
     try {
       setIsSaving(true);
-      const token = await AsyncStorage.getItem("@fcm_token");
+      let token = await getStoredPushToken();
+      // 저장된 토큰이 없으면 권한 요청·토큰 발급을 한 번 더 시도
+      if (!token) {
+        token = await ensurePushTokenAndRegister();
+      }
 
       if (!token) {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
         Alert.alert(
-          "알림",
-          "기기 등록 정보를 찾을 수 없습니다. 앱을 재실행한 뒤 '완료'를 다시 눌러 주세요."
+          "알림 등록 불가",
+          "푸시 알림을 쓰려면 '알림 허용'이 필요합니다. 기기 설정에서 앱 알림을 켠 뒤 앱을 다시 실행하고, '완료'를 다시 눌러 주세요."
         );
         return;
       }
@@ -187,7 +189,7 @@ export default function NotificationScreen() {
         }
       />
 
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.BACKGROUND }]} edges={["left", "right", "bottom"]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.WHITE }]} edges={["left", "right", "bottom"]}>
         <View style={styles.body}>
           <Text style={[styles.big, { color: colors.TEXT_PRIMARY }]}>
             알림 받고 싶은{"\n"}카테고리를 선택해 주세요

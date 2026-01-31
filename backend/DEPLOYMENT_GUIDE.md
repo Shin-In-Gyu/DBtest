@@ -7,9 +7,9 @@
 
 ### 서버 정보
 - **IP 주소**: `16.184.63.211`
-- **포트**: `8000`
+- **포트**: `80` (기본 HTTP 포트)
 - **프로토콜**: HTTP (HTTPS 미설정)
-- **API Base URL**: `http://16.184.63.211:8000`
+- **API Base URL**: `http://16.184.63.211`
 
 ### 배포 방식
 - Docker 컨테이너 기반
@@ -42,8 +42,9 @@ ENABLE_TEST_ENDPOINTS=false
 서버의 `/srv/kangrimi-backend/docker-compose.yml` 위치에 배치
 
 ### 3. 포트 설정
-- AWS Security Group에서 **8000 포트 개방** 필요
+- AWS Security Group에서 **80 포트 개방** 필요
 - 인바운드 규칙: `0.0.0.0/0` (모든 IP) 또는 특정 IP만 허용
+- 참고: 서버 내부에서는 8000 포트로 실행되지만, 외부에는 80 포트로 리버스 프록시됨 (Nginx 등)
 
 ## 📱 Frontend 연동 설정
 
@@ -103,7 +104,7 @@ docker compose logs -f app
 
 ### 헬스체크
 ```bash
-curl http://16.184.63.211:8000/api/health
+curl http://16.184.63.211/api/health
 ```
 
 ### 로그 확인
@@ -144,14 +145,14 @@ docker compose ps
 **해결**:
 ```bash
 cd frontend
-echo "EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211:8000" > .env
+echo "EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211" > .env
 ```
 
 ### 문제: Network Error 또는 연결 실패
 **확인사항**:
-1. AWS Security Group에서 8000 포트 개방 확인
+1. AWS Security Group에서 80 포트 개방 확인
 2. 백엔드 컨테이너 실행 중인지 확인: `docker ps`
-3. 헬스체크 테스트: `curl http://16.184.63.211:8000/api/health`
+3. 헬스체크 테스트: `curl http://16.184.63.211/api/health`
 4. `app.json`에 HTTP 허용 설정 확인
 
 ### 문제: CORS 에러

@@ -1,19 +1,17 @@
 import ErrorBanner from "@/components/ErrorBanner";
 import { NoticeCardRow } from "@/components/NoticeCardRow";
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { categories } from "@/constants/knuSources";
 import { useKnuNotices } from "@/hooks/useKNUNoitces";
 import { toUserFriendlyMessage } from "@/utils/errorMessage";
-import { Dimensions } from "react-native";
 import React, { useMemo } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator, Dimensions, FlatList,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -75,20 +73,22 @@ export function NoticeListPage({
     return flatItems;
   }, [flatItems, tabKey, selectedDepts]);
 
+  const colors = useColors();
+
   const footer = useMemo(() => {
     if (!noticesEnabled) return null;
     if (isFetchingNextPage) {
       return (
         <View style={s.footer}>
           <ActivityIndicator color={colors.KNU} />
-          <Text style={s.footerText}>불러오는 중...</Text>
+          <Text style={[s.footerText, { color: colors.TEXT_SECONDARY }]}>불러오는 중...</Text>
         </View>
       );
     }
     if (!hasNextPage) {
       return (
         <View style={s.footer}>
-          <Text style={s.footerText}>마지막입니다</Text>
+          <Text style={[s.footerText, { color: colors.TEXT_SECONDARY }]}>마지막입니다</Text>
         </View>
       );
     }
@@ -96,27 +96,35 @@ export function NoticeListPage({
       <View style={s.footer}>
         <Pressable
           onPress={() => fetchNextPage()}
-          style={({ pressed }) => [s.loadMoreBtn, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [
+            s.loadMoreBtn,
+            { backgroundColor: colors.KNU },
+            pressed && { opacity: 0.7 }
+          ]}
         >
-          <Text style={s.loadMoreText}>더 불러오기</Text>
+          <Text style={[s.loadMoreText, { color: colors.WHITE }]}>더 불러오기</Text>
         </Pressable>
       </View>
     );
-  }, [noticesEnabled, isFetchingNextPage, hasNextPage, fetchNextPage]);
+  }, [noticesEnabled, isFetchingNextPage, hasNextPage, fetchNextPage, colors]);
 
   if (tabKey === "dept" && !deptKey) {
     return (
       <View style={[s.deptEmptyWrap, { width: SCREEN_WIDTH }]}>
-        <Text style={s.deptEmptyTitle}>학과를 설정하세요.</Text>
-        <Text style={s.deptEmptyDesc}>
+        <Text style={[s.deptEmptyTitle, { color: colors.TEXT_PRIMARY }]}>학과를 설정하세요.</Text>
+        <Text style={[s.deptEmptyDesc, { color: colors.TEXT_SECONDARY }]}>
           학과를 선택하면 해당 학과 공지사항을 보여드릴게요.
         </Text>
 
         <Pressable
           onPress={onAddDept}
-          style={({ pressed }) => [s.deptBtn, pressed && { opacity: 0.8 }]}
+          style={({ pressed }) => [
+            s.deptBtn,
+            { backgroundColor: colors.KNU },
+            pressed && { opacity: 0.8 }
+          ]}
         >
-          <Text style={s.deptBtnText}>학과설정하기</Text>
+          <Text style={[s.deptBtnText, { color: colors.WHITE }]}>학과설정하기</Text>
         </Pressable>
       </View>
     );
@@ -157,7 +165,7 @@ export function NoticeListPage({
         }}
         onEndReachedThreshold={0.5}
         ListEmptyComponent={
-          <Text style={s.helperText}>
+          <Text style={[s.helperText, { color: colors.TEXT_SECONDARY }]}>
             {isFetching ? "불러오는 중..." : "표시할 공지사항이 없습니다."}
           </Text>
         }
@@ -178,17 +186,16 @@ const s = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
-  deptEmptyTitle: { fontSize: 18, fontWeight: "900", color: "#111827" },
-  deptEmptyDesc: { color: "#6b7280", fontSize: 13, textAlign: "center" },
+  deptEmptyTitle: { fontSize: 18, fontWeight: "900" },
+  deptEmptyDesc: { fontSize: 13, textAlign: "center" },
   deptBtn: {
     marginTop: 6,
-    backgroundColor: colors.KNU,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
   },
-  deptBtnText: { color: "#fff", fontWeight: "900" },
-  helperText: { color: "#6b7280", fontSize: 14, marginTop: 4, textAlign: 'center' },
+  deptBtnText: { fontWeight: "900" },
+  helperText: { fontSize: 14, marginTop: 4, textAlign: 'center' },
   listContent: { padding: 12, gap: 10 },
   emptyContainer: {
     flexGrow: 1,
@@ -197,12 +204,11 @@ const s = StyleSheet.create({
     padding: 16,
   },
   footer: { paddingVertical: 16, alignItems: "center", gap: 10 },
-  footerText: { color: "#6b7280", fontSize: 13 },
+  footerText: { fontSize: 13 },
   loadMoreBtn: {
-    backgroundColor: colors.KNU,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
   },
-  loadMoreText: { color: colors.WHITE, fontWeight: "800" },
+  loadMoreText: { fontWeight: "800" },
 });

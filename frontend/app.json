@@ -4,37 +4,38 @@
     "slug": "kangrimi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/kangrimi-icon.png",
+    "icon": "./assets/images/kangrimi-favicon.png",
     "scheme": "kangrimi",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.campusnotice.fe",
-      "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        }
-      }
+      "bundleIdentifier": "com.campusnotice.fe"
     },
     "android": {
       "package": "com.campusnotice.fe",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/kangrimi-icon-foreground.png",
+        "foregroundImage": "./assets/images/kangrimi-icon.png",
         "monochromeImage": "./assets/images/kangrimi-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": [],
-      "usesCleartextTraffic": true
+      "permissions": []
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/kangrimi-favicon.png"
     },
     "plugins": [
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "android": {
+            "useFCM": false
+          }
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",
@@ -58,6 +59,7 @@
         "expo-build-properties",
         {
           "android": {
+            "usesCleartextTraffic": true,
             "extraMavenRepos": [
               "https://repository.map.naver.com/archive/maven"
             ]

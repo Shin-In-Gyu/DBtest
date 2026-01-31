@@ -61,24 +61,6 @@ export default function SearchScreen() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // 최근 검색어 저장 (검색 실행 시에만)
-  useEffect(() => {
-    if (searchQuery) {
-      const trimmed = searchQuery.trim();
-      if (!trimmed) return;
-      setRecent((prev) => {
-        const newRecent = [trimmed, ...prev.filter((x) => x !== trimmed)].slice(
-          0,
-          10,
-        );
-        AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(newRecent)).catch(
-          () => {},
-        );
-        return newRecent;
-      });
-    }
-  }, [searchQuery]);
-
   const {
     flatItems: rawFlatItems,
     isFetching,
@@ -108,10 +90,24 @@ export default function SearchScreen() {
   }, [rawFlatItems, searchQuery]);
 
 
+  /** 검색어를 최근 검색어에 추가(엔터/검색 버튼 또는 결과 탭 시 호출) */
+  const saveSearchToRecent = (term: string) => {
+    const t = term.trim();
+    if (!t) return;
+    setRecent((prev) => {
+      const newRecent = [t, ...prev.filter((x) => x !== t)].slice(0, 10);
+      AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(newRecent)).catch(
+        () => {},
+      );
+      return newRecent;
+    });
+  };
+
   const onSubmit = () => {
     const trimmed = query.trim();
     if (!trimmed) return;
     setSearchQuery(trimmed);
+    saveSearchToRecent(trimmed);
   };
 
   const onRecentPress = (word: string) => {
@@ -162,9 +158,18 @@ export default function SearchScreen() {
   return (
     <>
       <OtherHeader title="검색" back={true} />
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.BACKGROUND }]} edges={["left", "right", "bottom"]}>
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.WHITE }]} edges={["left", "right", "bottom"]}>
         <View style={s.container}>
-          <View style={[s.searchBox, { backgroundColor: colors.BACKGROUND_LIGHT }]}>
+          <View
+            style={[
+              s.searchBox,
+              {
+                backgroundColor: colors.WHITE,
+                borderWidth: 1,
+                borderColor: colors.BORDER_COLOR,
+              },
+            ]}
+          >
             <Ionicons name="search" size={20} color={colors.PLACEHOLDER_COLOR} />
             <TextInput
               value={query}
@@ -228,6 +233,7 @@ export default function SearchScreen() {
                     isRead={isRead(item.detailUrl)}
                     highlightQuery={searchQuery}
                     onPress={() => {
+                      saveSearchToRecent(searchQuery);
                       router.push({
                         pathname: "/notice-detail",
                         params: {

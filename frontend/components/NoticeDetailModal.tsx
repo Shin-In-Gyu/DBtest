@@ -1,10 +1,9 @@
+import { ImageWithLoading } from "@/components/ImageWithLoading";
 import { colors } from "@/constants";
 import type { NoticeDetail } from "@/types";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   ActivityIndicator,
-  Image,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -12,54 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-
-async function openUrl(url: string) {
-  const can = await Linking.canOpenURL(url);
-  if (!can) throw new Error("링크를 열 수 없습니다.");
-  await Linking.openURL(url);
-}
-
-// 이미지 로딩 상태를 처리하는 컴포넌트
-function ImageWithLoading({
-  imageUrl,
-  style,
-}: {
-  imageUrl: string;
-  style: any;
-}) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  return (
-    <View style={[style, s.imageContainer]}>
-      {loading && (
-        <View style={s.imageLoadingContainer}>
-          <ActivityIndicator size="small" color={colors.KNU} />
-        </View>
-      )}
-      {error ? (
-        <View style={s.imageErrorContainer}>
-          <Text style={s.imageErrorText}>이미지를 불러올 수 없습니다</Text>
-        </View>
-      ) : (
-        <Image
-          source={{ uri: imageUrl }}
-          style={style}
-          resizeMode="contain"
-          onLoadStart={() => {
-            setLoading(true);
-            setError(false);
-          }}
-          onLoadEnd={() => setLoading(false)}
-          onError={() => {
-            setLoading(false);
-            setError(true);
-          }}
-        />
-      )}
-    </View>
-  );
-}
+import { openUrl } from "@/utils/linking";
 
 export default function NoticeDetailModal({
   visible,
@@ -221,36 +173,6 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   closeText: { fontSize: 16, fontWeight: "700", color: "#111827" },
-  // 이미지 관련 스타일
-  imageContainer: {
-    position: "relative",
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  imageLoadingContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-    zIndex: 1,
-  },
-  imageErrorContainer: {
-    width: "100%",
-    height: 200,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-  },
-  imageErrorText: {
-    color: "#6b7280",
-    fontSize: 14,
-  },
-  // 이미지만 있는 경우
   imageOnlyContainer: {
     width: "100%",
     gap: 8,

@@ -16,33 +16,37 @@ import KNU_API_BASE from "./base-uri";
 
 type QueryValue = string | number | boolean | undefined | null;
 
-function buildUrl(path: string, params?: Record<string, QueryValue>) {
-  const url = new URL(`${KNU_API_BASE}${path}`);
+/**
+ * URL 조합 함수 - 쿼리 파라미터 추가
+ */
+function buildUrl(path: string, params?: Record<string, QueryValue>): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = KNU_API_BASE.endsWith("/") 
+    ? KNU_API_BASE.slice(0, -1) 
+    : KNU_API_BASE;
+  const fullPath = `${baseUrl}${normalizedPath}`;
+  
+  const url = new URL(fullPath);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
       if (v === undefined || v === null) return;
       url.searchParams.set(k, String(v));
     });
   }
+  
   return url.toString();
 }
 
+/**
+ * fetch 래퍼
+ */
 async function safeFetch<T>(url: string): Promise<T> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`요청 실패 (${res.status})\n${text.slice(0, 300)}`);
-    }
-    return (await res.json()) as T;
-  } catch (error) {
-    // 네트워크 에러나 연결 실패 시 더 자세한 정보 제공
-    if (error instanceof TypeError && error.message.includes("fetch")) {
-      console.error(`[API] 네트워크 에러 - URL: ${url}`, error);
-      throw new Error(`네트워크 연결 실패: ${url}`);
-    }
-    throw error;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`요청 실패 (${res.status})\n${text.slice(0, 300)}`);
   }
+  return (await res.json()) as T;
 }
 
 // ============================================================
@@ -145,10 +149,9 @@ export async function incrementNoticeView(noticeId: number): Promise<void> {
   }
 
   try {
-    const url = `${KNU_API_BASE}/notice/${noticeId}/view`.replace(
-      /([^:]\/)\/+/g,
-      "$1"
-    );
+    const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+    const url = `${baseUrl}/notice/${noticeId}/view`;
+    
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -169,10 +172,8 @@ export async function incrementNoticeView(noticeId: number): Promise<void> {
 export async function generateNoticeSummary(
   noticeId: number
 ): Promise<SummaryResponse> {
-  const url = `${KNU_API_BASE}/notice/${noticeId}/summary`.replace(
-    /([^:]\/)\/+/g,
-    "$1"
-  );
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/notice/${noticeId}/summary`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -205,7 +206,8 @@ export async function getSubscriptions(
 export async function updateSubscriptions(
   params: SubscriptionRequest
 ): Promise<SubscriptionResponse> {
-  const url = `${KNU_API_BASE}/device/subscriptions`;
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/device/subscriptions`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -230,10 +232,8 @@ export async function toggleScrap(params: {
   noticeId: number;
   token: string;
 }): Promise<ScrapToggleResponse> {
-  const url = `${KNU_API_BASE}/scrap/${params.noticeId}`.replace(
-    /([^:]\/)\/+/g,
-    "$1"
-  );
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/scrap/${params.noticeId}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -287,7 +287,8 @@ export async function getMyScraps(
 // 카테고리 목록 조회
 // ============================================================
 export async function getCategories(): Promise<CategoryInfo[]> {
-  const url = `${KNU_API_BASE}/categories`;
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/categories`;
   return safeFetch(url);
 }
 
@@ -295,7 +296,8 @@ export async function getCategories(): Promise<CategoryInfo[]> {
 // 통계 조회
 // ============================================================
 export async function getStatistics(): Promise<Statistics> {
-  const url = `${KNU_API_BASE}/stats`;
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/stats`;
   return safeFetch(url);
 }
 
@@ -338,7 +340,8 @@ export async function advancedSearch(
 // 기기 등록
 // ============================================================
 export async function registerDevice(token: string): Promise<void> {
-  const url = `${KNU_API_BASE}/device/register`;
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/device/register`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -361,7 +364,8 @@ export async function submitFeedback(params: {
   title: string;
   content: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const url = `${KNU_API_BASE}/feedback`;
+  const baseUrl = KNU_API_BASE.endsWith("/") ? KNU_API_BASE.slice(0, -1) : KNU_API_BASE;
+  const url = `${baseUrl}/feedback`;
 
   const res = await fetch(url, {
     method: "POST",

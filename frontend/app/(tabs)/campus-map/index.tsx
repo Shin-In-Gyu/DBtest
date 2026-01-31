@@ -8,7 +8,7 @@ import {
   type NaverMapViewRef,
 } from "@mj-studio/react-native-naver-map";
 import React, { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CampusMapScreen() {
@@ -74,7 +74,7 @@ export default function CampusMapScreen() {
       <View
         style={[
           styles.tabBar(colors),
-          { paddingBottom: Math.max(insets.bottom, 10) },
+          { paddingBottom: Math.max(insets.bottom, 4) },
         ]}
       >
         <ScrollView

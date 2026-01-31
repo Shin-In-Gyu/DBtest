@@ -5,10 +5,16 @@ import { useColors } from "@/constants";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+/** 탭바 콘텐츠 높이 (iOS 49pt / Material 56dp 국룰 → 56 사용) */
+const TAB_BAR_CONTENT_HEIGHT = 56;
 
 export default function TabLayout() {
   const colors = useColors();
-  
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+
   return (
     <Tabs
       screenOptions={{
@@ -18,6 +24,8 @@ export default function TabLayout() {
           backgroundColor: colors.CARD_BACKGROUND,
           borderTopWidth: 1,
           borderTopColor: colors.BORDER_COLOR,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom,
         },
         tabBarLabelStyle: { fontSize: 11 },
         headerShown: false,

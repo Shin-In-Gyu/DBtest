@@ -1,5 +1,5 @@
 import OtherHeader from "@/components/OtherHeader";
-import { colors } from "@/constants";
+import { useColors } from "@/constants";
 import { categoryOptions } from "@/constants/knuSources";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const DEPT_STORAGE_KEY_V2 = "@knu_selected_depts_v2";
 
 export default function DeptSelectScreen() {
+  const colors = useColors();
   const router = useRouter();
   const params = useLocalSearchParams<{ selectedIds?: string }>();
   
@@ -76,29 +77,29 @@ export default function DeptSelectScreen() {
   return (
     <>
       <OtherHeader title="학과 선택" back={true} />
-      <SafeAreaView style={s.safe} edges={["left", "right", "bottom"]}>
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.BACKGROUND }]} edges={["left", "right", "bottom"]}>
         <View style={s.container}>
           {/* 검색 박스 */}
-          <View style={s.searchBox}>
-            <Ionicons name="search" size={20} color="#9CA3AF" />
+          <View style={[s.searchBox, { backgroundColor: colors.CARD_BACKGROUND }]}>
+            <Ionicons name="search" size={20} color={colors.TEXT_TERTIARY} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="학과명으로 검색"
-              placeholderTextColor="#9CA3AF"
-              style={s.input}
+              placeholderTextColor={colors.PLACEHOLDER_COLOR}
+              style={[s.input, { color: colors.TEXT_PRIMARY }]}
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
               <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
-                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                <Ionicons name="close-circle" size={20} color={colors.TEXT_TERTIARY} />
               </Pressable>
             )}
           </View>
 
           {/* 검색 결과 개수 */}
           {searchQuery.trim() && (
-            <Text style={s.resultCount}>
+            <Text style={[s.resultCount, { color: colors.TEXT_SECONDARY }]}>
               {filteredDepts.length}개 학과 찾음
             </Text>
           )}
@@ -115,11 +116,20 @@ export default function DeptSelectScreen() {
                   onPress={() => handleSelect(item.id)}
                   style={({ pressed }) => [
                     s.item,
-                    isSelected && s.itemActive,
+                    {
+                      backgroundColor: isSelected 
+                        ? colors.KNU_LIGHT 
+                        : colors.CARD_BACKGROUND,
+                      borderColor: isSelected ? colors.KNU : colors.BORDER_COLOR,
+                    },
                     pressed && { opacity: 0.85 },
                   ]}
                 >
-                  <Text style={[s.itemText, isSelected && s.itemTextActive]}>
+                  <Text style={[
+                    s.itemText,
+                    { color: isSelected ? colors.KNU : colors.TEXT_PRIMARY },
+                    isSelected && s.itemTextActive
+                  ]}>
                     {item.label}
                   </Text>
                   {isSelected && (
@@ -130,7 +140,7 @@ export default function DeptSelectScreen() {
             }}
             ListEmptyComponent={
               <View style={s.empty}>
-                <Text style={s.emptyText}>
+                <Text style={[s.emptyText, { color: colors.TEXT_TERTIARY }]}>
                   {searchQuery.trim()
                     ? `"${searchQuery}"에 해당하는 학과를 찾을 수 없습니다.`
                     : "학과가 없습니다."}
@@ -147,7 +157,6 @@ export default function DeptSelectScreen() {
 const s = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.WHITE,
   },
   container: {
     flex: 1,
@@ -157,7 +166,6 @@ const s = StyleSheet.create({
     marginTop: 14,
     height: 52,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
     paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -166,12 +174,10 @@ const s = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: colors.BLACK,
   },
   resultCount: {
     marginTop: 12,
     fontSize: 14,
-    color: "#6B7280",
     fontWeight: "600",
   },
   list: {
@@ -186,21 +192,13 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: "#f8fafc",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  itemActive: {
-    backgroundColor: "rgba(0, 109, 184, 0.08)",
-    borderColor: colors.KNU,
   },
   itemText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#334155",
   },
   itemTextActive: {
-    color: colors.KNU,
     fontWeight: "700",
   },
   empty: {
@@ -211,7 +209,6 @@ const s = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#9CA3AF",
     textAlign: "center",
   },
 });
