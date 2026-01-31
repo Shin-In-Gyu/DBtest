@@ -321,12 +321,32 @@ async def get_my_scraps(token: str, db: AsyncSession = Depends(get_db)):
     return scraped_notices
 
 # ============================================================
+# 카테고리 구독 조회
+# ============================================================
+@router.get("/device/subscriptions")
+async def get_device_subscriptions(
+    token: str = Query(..., min_length=10, description="기기 식별 토큰"),
+    db: AsyncSession = Depends(get_db),
+):
+    """기기에 저장된 구독 카테고리 목록 반환 (프론트엔드 동기화용)"""
+    stmt_device = select(Device).filter(Device.token == token).options(
+        selectinload(Device.subscriptions)
+    )
+    res_device = await db.execute(stmt_device)
+    device = res_device.scalars().first()
+    if not device:
+        return {"categories": []}
+    categories = [kw.word for kw in device.subscriptions]
+    return {"categories": categories}
+
+
+# ============================================================
 # 카테고리 구독 설정
 # ============================================================
 @router.post("/device/subscriptions")
 async def update_device_subscriptions(
-    request: KeywordSubscriptionRequest, 
-    db: AsyncSession = Depends(get_db)
+    request: KeywordSubscriptionRequest,
+    db: AsyncSession = Depends(get_db),
 ):
     stmt_device = select(Device).filter(Device.token == request.token).options(
         selectinload(Device.subscriptions)
@@ -338,7 +358,7 @@ async def update_device_subscriptions(
         device = Device(token=request.token)
         db.add(device)
         await db.flush()
-    
+
     if request.categories:
         stmt_keys = select(Keyword).where(Keyword.word.in_(request.categories))
         res_keys = await db.execute(stmt_keys)

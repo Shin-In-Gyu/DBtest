@@ -194,6 +194,9 @@ export default function NotificationScreen() {
           <Text style={[styles.big, { color: colors.TEXT_PRIMARY }]}>
             알림 받고 싶은{"\n"}카테고리를 선택해 주세요
           </Text>
+          <Text style={[styles.hint, { color: colors.TEXT_TERTIARY }]}>
+            선택 후 오른쪽 상단 「완료」 버튼을 눌러야 새 공지 알림을 받을 수 있습니다.
+          </Text>
 
           {/* 탭 전환 섹션 */}
           <View style={[styles.tabRow, { borderBottomColor: colors.BORDER_COLOR }]}>
@@ -261,7 +264,8 @@ const styles = {
   },
   body: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
   big: { fontSize: 24, fontWeight: "900" as const, lineHeight: 34 },
-  
+  hint: { fontSize: 14, marginTop: 8, lineHeight: 20 },
+
   tabRow: { marginTop: 18, flexDirection: "row" as const, borderBottomWidth: 1 },
   tabBtn: { flex: 1, paddingVertical: 12, alignItems: "center" as const, borderBottomWidth: 3, borderBottomColor: "transparent" },
   tabBtnActive: (colors: ReturnType<typeof useColors>) => ({ borderBottomColor: colors.KNU }),

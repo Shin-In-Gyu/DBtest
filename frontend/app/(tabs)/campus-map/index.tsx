@@ -87,6 +87,7 @@ export default function CampusMapScreen() {
               selectedBuilding?.name === building.name ||
               (building.code === undefined &&
                 selectedBuilding?.code === undefined);
+                
             return (
               <Pressable
                 key={`${building.name}-${building.code ?? "all"}`}

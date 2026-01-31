@@ -18,6 +18,7 @@ export default function MoreLayout() {
           headerShown: false,
         }}
       />
+      
       <Stack.Screen
         name="open-source"
         options={{

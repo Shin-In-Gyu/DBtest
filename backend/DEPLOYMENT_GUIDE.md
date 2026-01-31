@@ -44,14 +44,14 @@ ENABLE_TEST_ENDPOINTS=false
 ### 3. 포트 설정
 - AWS Security Group에서 **80 포트 개방** 필요
 - 인바운드 규칙: `0.0.0.0/0` (모든 IP) 또는 특정 IP만 허용
-- 참고: 서버 내부에서는 8000 포트로 실행되지만, 외부에는 80 포트로 리버스 프록시됨 (Nginx 등)
+- Docker에서 8000 포트를 80 포트로 매핑하여 외부에 노출
 
 ## 📱 Frontend 연동 설정
 
 ### frontend/.env 파일
 ```bash
 # HTTP 프로토콜 사용 (HTTPS 아님)
-EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211:8000
+EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211
 ```
 
 ### app.json 설정
@@ -147,6 +147,8 @@ docker compose ps
 cd frontend
 echo "EXPO_PUBLIC_API_BASE_URL=http://16.184.63.211" > .env
 ```
+
+참고: docker-compose.prod.yml에서 포트를 `80:8000`으로 매핑하면 외부에서 80 포트로 접근 가능합니다.
 
 ### 문제: Network Error 또는 연결 실패
 **확인사항**:

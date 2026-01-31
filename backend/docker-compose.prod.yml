@@ -6,7 +6,7 @@ services:
     container_name: kangrimi-backend
     restart: always
     ports:
-      - "8000:8000"
+      - "80:8000"
     environment:
       # 데이터베이스 설정
       - DB_URL=${DB_URL}
